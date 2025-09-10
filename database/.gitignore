@@ -1,1 +1,19 @@
-*.sqlite*
+# dependencies / builds
+/vendor/
+/node_modules/
+public/build/
+
+# laravel
+.env
+.env.*
+!.env.example
+storage/*.key
+storage/logs/
+storage/framework/
+
+# misc
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+* text=auto eol=lf
