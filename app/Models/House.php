@@ -10,7 +10,12 @@ class House extends Model
     protected $primaryKey = 'houseNo';
     public $incrementing = false;
     protected $keyType = 'string';
-    public $timestamps = false;
+    public $timestamps = false; // only custom "timestamp" column in table
 
-    protected $fillable = ['HouseOwneId','houseNo','timestamp'];
+    protected $fillable = ['houseNo', 'HouseOwneId'];
+
+    public function owner()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'HouseOwneId');
+    }
 }

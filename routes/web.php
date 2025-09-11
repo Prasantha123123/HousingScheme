@@ -32,11 +32,11 @@ Route::get('/dashboard', function () {
     $role = auth()->user()->role ?? null;
 
     return match ($role) {
-        'Admin'      => redirect()->route('admin.dashboard.index'),
+        'Admin' => redirect()->route('admin.dashboard.index'),
         'Houseowner' => redirect()->route('customer.bills.index'),
-        'Merchant'   => redirect()->route('merchant.rentals.index'),
-        'Employee'   => redirect()->route('employee.home'),
-        default      => abort(403),
+        'Merchant' => redirect()->route('merchant.rentals.index'),
+        'Employee' => redirect()->route('employee.home'),
+        default => abort(403),
     };
 })->middleware('auth')->name('dashboard');
 
@@ -54,8 +54,12 @@ Route::middleware(['auth'])->group(function () {
 
         // Houses
         Route::get('/houses', [App\Http\Controllers\Admin\HouseController::class, 'index'])->name('houses.index');
+        Route::get('/houses/create', [App\Http\Controllers\Admin\HouseController::class, 'create'])->name('houses.create');
+        Route::post('/houses', [App\Http\Controllers\Admin\HouseController::class, 'store'])->name('houses.store');
         Route::get('/houses/{houseNo}', [App\Http\Controllers\Admin\HouseController::class, 'show'])->name('houses.show');
-
+        Route::get('/houses/{houseNo}/edit', [App\Http\Controllers\Admin\HouseController::class, 'edit'])->name('houses.edit');
+        Route::put('/houses/{houseNo}', [App\Http\Controllers\Admin\HouseController::class, 'update'])->name('houses.update');
+        Route::delete('/houses/{houseNo}', [App\Http\Controllers\Admin\HouseController::class, 'destroy'])->name('houses.destroy');
         // House Bills (HouseRental)
         Route::get('/house-bills', [App\Http\Controllers\Admin\HouseBillController::class, 'index'])->name('house-bills.index');
         Route::post('/house-bills/generate', [App\Http\Controllers\Admin\HouseBillController::class, 'generate'])->name('house-bills.generate');
@@ -94,7 +98,7 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/settings', [App\Http\Controllers\Admin\SettingController::class, 'update'])->name('settings.update');
 
         // Users
-        Route::resource('users', App\Http\Controllers\Admin\UserController::class)->only(['index','create','store','edit','update']);
+        Route::resource('users', App\Http\Controllers\Admin\UserController::class)->only(['index', 'create', 'store', 'edit', 'update']);
     });
 
     // ----- Customer (Houseowner) -----
