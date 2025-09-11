@@ -1,6 +1,14 @@
 @extends('layouts.app')
+
 @section('content')
-<h1 class="text-xl font-semibold mb-3">Shop Rentals</h1>
+<div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+  <h1 class="text-xl font-semibold">Shop Rentals</h1>
+
+  {{-- Optional quick link to add a new shop --}}
+  <a href="{{ route('admin.shops.create') }}" class="px-3 py-2 bg-gray-900 text-white rounded-lg">
+    Add Shop
+  </a>
+</div>
 
 {{-- Filters: stack nicely on small screens --}}
 <form method="get" class="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 mb-3">
@@ -56,19 +64,32 @@
 
       <div class="mt-2">
         @if($r->recipt)
-          <a target="_blank" class="text-blue-600 hover:underline text-sm" href="{{ asset('storage/'.$r->recipt) }}">Receipt</a>
+          <a target="_blank" class="text-blue-600 hover:underline text-sm" href="{{ asset('storage/'.$r->recipt) }}">Open receipt</a>
         @endif
       </div>
 
       <div class="mt-3 flex items-center justify-end gap-3">
+        {{-- Approve (one click) --}}
         <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="inline">
           @csrf
-          <button class="text-green-700">Approve</button>
+          <button
+            class="px-2 py-1 text-green-700"
+            @disabled($r->status === 'Approved')
+            @class([
+              'opacity-50 cursor-not-allowed' => $r->status === 'Approved'
+            ])
+          >
+            Approve
+          </button>
         </form>
-        <form method="post" action="{{ route('admin.shop-rentals.reject',$r->id) }}" class="inline">
-          @csrf
-          <button class="text-red-700">Reject</button>
-        </form>
+
+        {{-- Reject (one click) --}}
+        @if($r->status !== 'Approved')
+          <form method="post" action="{{ route('admin.shop-rentals.reject',$r->id) }}" class="inline">
+            @csrf
+            <button class="px-2 py-1 text-red-700">Reject</button>
+          </form>
+        @endif
       </div>
     </div>
   @empty
@@ -98,7 +119,7 @@
         <td class="px-3 py-2">{{ $r->month }}</td>
         <td class="px-3 py-2 text-right">{{ number_format($r->billAmount,2) }}</td>
         <td class="px-3 py-2 text-right hidden md:table-cell">{{ number_format($r->paidAmount,2) }}</td>
-        <td class="px-3 py-2 hidden lg:table-cell uppercase">{{ $r->paymentMethod }}</td>
+        <td class="px-3 py-2 hidden lg:table-cell uppercase">{{ $r->paymentMethod ?: '-' }}</td>
         <td class="px-3 py-2 hidden lg:table-cell">
           @if($r->recipt)
             <a target="_blank" class="text-blue-600 hover:underline" href="{{ asset('storage/'.$r->recipt) }}">Open</a>
@@ -106,15 +127,28 @@
         </td>
         <td class="px-3 py-2"><x-badge :status="$r->status"/></td>
         <td class="px-3 py-2 text-right whitespace-nowrap">
+          {{-- Approve --}}
           <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="inline">
             @csrf
-            <button class="text-green-700">Approve</button>
+            <button
+              class="text-green-700"
+              @disabled($r->status === 'Approved')
+              @class([
+                'opacity-50 cursor-not-allowed' => $r->status === 'Approved'
+              ])
+            >
+              Approve
+            </button>
           </form>
-          <span class="mx-2 text-gray-300">|</span>
-          <form method="post" action="{{ route('admin.shop-rentals.reject',$r->id) }}" class="inline">
-            @csrf
-            <button class="text-red-700">Reject</button>
-          </form>
+
+          @if($r->status !== 'Approved')
+            <span class="mx-2 text-gray-300">|</span>
+            {{-- Reject --}}
+            <form method="post" action="{{ route('admin.shop-rentals.reject',$r->id) }}" class="inline">
+              @csrf
+              <button class="text-red-700">Reject</button>
+            </form>
+          @endif
         </td>
       </tr>
     @empty
@@ -123,5 +157,7 @@
   </x-table>
 </div>
 
-@if(isset($rows)) <div class="mt-3">{{ $rows->links() }}</div> @endif
+@if(isset($rows))
+  <div class="mt-3">{{ $rows->links() }}</div>
+@endif
 @endsection

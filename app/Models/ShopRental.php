@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ShopRental extends Model
 {
@@ -13,4 +14,10 @@ class ShopRental extends Model
         'shopNumber','billAmount','month','paidAmount','paymentMethod',
         'recipt','status','timestamp'
     ];
+
+    public function shop(): BelongsTo
+    {
+        // Shop primary key is shopNumber (string)
+        return $this->belongsTo(Shop::class, 'shopNumber', 'shopNumber');
+    }
 }

@@ -5,35 +5,92 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\HouseRental;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class HouseBillApproveController extends Controller
 {
-    public function approve(Request $req, $id)
+    public function approve(Request $request, int $id)
     {
-        $data = $req->validate([
-            'paidAmount' => ['nullable','numeric','min:0'],
-            'paymentMethod' => ['required','in:cash,card,online'],
-            'recipt' => ['nullable','file','mimes:pdf,jpg,jpeg,png','max:5120'],
-        ]);
-        $r = HouseRental::findOrFail($id);
-        $r->paidAmount = $data['paidAmount'] ?? $r->billAmount;
-        $r->paymentMethod = $data['paymentMethod'];
-        if ($req->hasFile('recipt')) {
-            $r->recipt = $req->file('recipt')->store('receipts','public');
-        }
-        $r->status = 'Approved';
-        $r->save();
+        // -------- BULK --------
+        if ($request->boolean('bulk')) {
+            $data = $request->validate([
+                'ids'           => ['required','array','min:1'],
+                'ids.*'         => ['integer','exists:HouseRental,id'],
+                'paymentMethod' => ['required', Rule::in(['cash','card','online'])],
+            ]);
 
-        return back()->with('success','Approved');
+            $method = $data['paymentMethod'];
+
+            $bills = HouseRental::whereIn('id', $data['ids'])->get();
+            foreach ($bills as $bill) {
+                if ($bill->paidAmount < $bill->billAmount) {
+                    // Skip not-fully-paid rows
+                    continue;
+                }
+                $bill->update([
+                    // don't touch paidAmount here
+                    'paymentMethod' => $method,
+                    'status'        => 'Approved',
+                ]);
+
+                $this->approveCascade($bill);
+            }
+
+            return back()->with('success', 'Selected bills approved.');
+        }
+
+        // -------- SINGLE --------
+        $data = $request->validate([
+            // optional: allow editing paid amount; if omitted, keep as-is
+            'paidAmount'    => ['nullable','numeric','min:0'],
+            'paymentMethod' => ['required', Rule::in(['cash','card','online'])],
+            'recipt'        => ['nullable','file','mimes:jpg,jpeg,png,pdf','max:2048'],
+        ]);
+
+        $bill = HouseRental::findOrFail($id);
+
+        if ($request->hasFile('recipt')) {
+            $bill->recipt = $request->file('recipt')->store('receipts', 'public');
+        }
+
+        if (array_key_exists('paidAmount', $data) && $data['paidAmount'] !== null) {
+            $bill->paidAmount = min((float)$data['paidAmount'], (float)$bill->billAmount);
+        }
+
+        if ($bill->paidAmount < $bill->billAmount) {
+            return back()->withErrors('Cannot approve: bill is not fully paid yet.');
+        }
+
+        $bill->paymentMethod = $data['paymentMethod'];
+        $bill->status        = 'Approved';
+        $bill->save();
+
+        $this->approveCascade($bill);
+
+        return back()->with('success', 'Bill approved.');
     }
 
-    public function reject(Request $req, $id)
+    public function reject(Request $request, int $id)
     {
-        $req->validate(['reason'=>['required','string','max:500']]);
-        $r = HouseRental::findOrFail($id);
-        $r->status = 'Rejected';
-        $r->save();
+        $request->validate(['reason' => ['required','string','max:1000']]);
 
-        return back()->with('success','Rejected: '.$req->input('reason'));
+        $bill = HouseRental::findOrFail($id);
+        $bill->status = 'Rejected';
+        $bill->save();
+
+        return back()->with('success', 'Bill rejected.');
+    }
+
+    protected function approveCascade(HouseRental $bill): void
+    {
+        // Approve all earlier fully paid rows for the same house
+        HouseRental::where('houseNo', $bill->houseNo)
+            ->where('month', '<=', $bill->month)
+            ->where('status', '!=', 'Approved')
+            ->whereColumn('paidAmount', '>=', 'billAmount')
+            ->update([
+                'status'        => 'Approved',
+                'paymentMethod' => $bill->paymentMethod,
+            ]);
     }
 }

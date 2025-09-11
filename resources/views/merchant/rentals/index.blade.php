@@ -10,58 +10,62 @@
     </div>
 
     <div class="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
-      <div>Amount:
-        <span class="font-semibold">{{ number_format($r->billAmount,2) }}</span>
-      </div>
-      <div>Paid:
-        <span>{{ number_format($r->paidAmount,2) }}</span>
-      </div>
+      <div>Amount: <span class="font-semibold">{{ number_format($r->billAmount,2) }}</span></div>
+      <div>Paid: <span>{{ number_format($r->paidAmount,2) }}</span></div>
       <div>
         @if($r->recipt)
-          Receipt:
-          <a target="_blank" href="{{ asset('storage/'.$r->recipt) }}" class="text-blue-600 hover:underline">Open</a>
+          Receipt: <a target="_blank" href="{{ asset('storage/'.$r->recipt) }}" class="text-blue-600 hover:underline">Open</a>
         @endif
       </div>
     </div>
 
     @if($r->status !== 'Approved')
-      <div class="mt-3 flex flex-col sm:flex-row sm:flex-wrap gap-3">
-        {{-- Online transfer (receipt upload) --}}
-        <form method="post"
-              action="{{ route('merchant.rentals.pay.transfer',$r->id) }}"
-              enctype="multipart/form-data"
-              class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-          @csrf
-          <label class="sr-only" for="reference-{{ $r->id }}">Bank reference</label>
-          <input id="reference-{{ $r->id }}"
-                 name="reference"
-                 class="rounded border-gray-300 w-full sm:w-48"
-                 placeholder="Bank Ref"
-                 required>
-          {{-- Your reusable uploader (pdf/jpg/png, ≤5MB server-validated) --}}
-          <x-upload name="recipt" :required="true" class="w-full sm:w-56"/>
-          <button class="px-3 py-2 bg-gray-900 text-white rounded-lg w-full sm:w-auto">
-            Upload Receipt
-          </button>
-        </form>
+      {{-- Unified payment form --}}
+      <form
+        x-data="{ method: 'card' }"
+        x-bind:action="method === 'card'
+            ? '{{ route('merchant.rentals.pay.card',   $r->id) }}'
+            : '{{ route('merchant.rentals.pay.transfer',$r->id) }}'"
+        method="post" enctype="multipart/form-data"
+        class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 items-end"
+      >
+        @csrf
 
-        {{-- Card payment --}}
-        <form method="post"
-              action="{{ route('merchant.rentals.pay.card',$r->id) }}"
-              class="w-full sm:w-auto">
-          @csrf
-          <button class="px-3 py-2 bg-blue-600 text-white rounded-lg w-full sm:w-auto">
-            Pay by Card
+        <label class="block">
+          <span class="text-sm text-gray-600">Payment Method</span>
+          <select x-model="method" name="paymentMethod" class="mt-1 w-full rounded border-gray-300" required>
+            <option value="card">Card</option>
+            <option value="online">Bank Transfer</option>
+          </select>
+        </label>
+
+        {{-- Bank transfer fields (conditional) --}}
+        <div class="grid gap-3 sm:col-span-2" x-show="method === 'online'">
+          <label class="block">
+            <span class="text-sm text-gray-600">Bank Reference</span>
+            <input name="reference" class="mt-1 w-full rounded border-gray-300" placeholder="Bank Ref">
+          </label>
+
+          <label class="block">
+            <span class="text-sm text-gray-600">Upload Receipt (PDF/JPG/PNG ≤ 5MB)</span>
+            <input type="file" name="recipt" accept="application/pdf,image/png,image/jpeg" class="mt-1 w-full">
+          </label>
+        </div>
+
+        <div class="sm:col-span-2 lg:col-span-1 text-right">
+          <button
+            class="px-3 py-2 bg-gray-900 text-white rounded-lg w-full sm:w-auto"
+            :disabled="false"
+          >
+            <span x-text="method === 'card' ? 'Pay Now' : 'Submit Transfer'"></span>
           </button>
-        </form>
-      </div>
+        </div>
+      </form>
     @endif
   </div>
 @empty
   <x-alert type="info">No rentals yet.</x-alert>
 @endforelse
 
-@if(isset($rentals))
-  <div class="mt-3">{{ $rentals->links() }}</div>
-@endif
+@if(isset($rentals)) <div class="mt-3">{{ $rentals->links() }}</div> @endif
 @endsection

@@ -66,10 +66,20 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/house-bills/{id}/approve', [App\Http\Controllers\Admin\HouseBillApproveController::class, 'approve'])->name('house-bills.approve');
         Route::post('/house-bills/{id}/reject', [App\Http\Controllers\Admin\HouseBillApproveController::class, 'reject'])->name('house-bills.reject');
 
+
+        Route::resource('shops', App\Http\Controllers\Admin\ShopController::class)
+            ->names('shops')
+            ->except('show');
+
         // Shop Rentals
-        Route::get('/shop-rentals', [App\Http\Controllers\Admin\ShopRentalController::class, 'index'])->name('shop-rentals.index');
-        Route::post('/shop-rentals/{id}/approve', [App\Http\Controllers\Admin\ShopRentalApproveController::class, 'approve'])->name('shop-rentals.approve');
-        Route::post('/shop-rentals/{id}/reject', [App\Http\Controllers\Admin\ShopRentalApproveController::class, 'reject'])->name('shop-rentals.reject');
+        Route::get('/shop-rentals', [App\Http\Controllers\Admin\ShopRentalController::class, 'index'])
+            ->name('shop-rentals.index');
+        Route::post('/shop-rentals/generate', [App\Http\Controllers\Admin\ShopRentalController::class, 'generate'])
+            ->name('shop-rentals.generate'); // <-- add this
+        Route::post('/shop-rentals/{id}/approve', [App\Http\Controllers\Admin\ShopRentalApproveController::class, 'approve'])
+            ->name('shop-rentals.approve');
+        Route::post('/shop-rentals/{id}/reject', [App\Http\Controllers\Admin\ShopRentalApproveController::class, 'reject'])
+            ->name('shop-rentals.reject');
 
         // Inventory Sales
         Route::resource('inventory-sales', App\Http\Controllers\Admin\InventorySaleController::class)
