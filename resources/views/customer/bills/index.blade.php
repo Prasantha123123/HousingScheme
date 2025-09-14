@@ -1,3 +1,4 @@
+{{-- resources/views/customer/bills/index.blade.php --}}
 @extends('layouts.app')
 
 @section('content')
@@ -6,13 +7,15 @@
 @php
   $unitPrice = (float) \App\Models\Setting::get('water_unit_price', 0);
   $sewerage  = (float) \App\Models\Setting::get('sewerage_charge', 0);
+  $service   = (float) \App\Models\Setting::get('service_charge', 0);  // NEW
 
+  // Precompute carry/total in ascending month order
   $calc = [];
   $runningOut = 0;
 
   foreach ($bills->getCollection()->sortBy('month') as $row) {
       $usage   = max(0, $row->readingUnit - $row->openingReadingUnit);
-      $current = $sewerage + ($usage * $unitPrice);
+      $current = $sewerage + $service + ($usage * $unitPrice); // include service
       $carry   = $runningOut;
       $total   = $carry + $current;
 
@@ -20,6 +23,7 @@
       $runningOut = max(0, $total - (float) $row->paidAmount);
   }
 
+  // Latest (by month) bill that is NOT approved
   $latestPending = optional(
       $bills->getCollection()->sortByDesc('month')->first(fn($r) => $r->status !== 'Approved')
   )->id;
@@ -29,7 +33,7 @@
   @php
     $usage = max(0, $b->readingUnit - $b->openingReadingUnit);
     $carry = $calc[$b->id]['carry']  ?? 0;
-    $total = $calc[$b->id]['total']  ?? ($sewerage + $usage * $unitPrice);
+    $total = $calc[$b->id]['total']  ?? ($sewerage + $service + $usage * $unitPrice); // include service in fallback
     $canPay = ($b->id === $latestPending) && $b->status !== 'Approved';
   @endphp
 
@@ -39,11 +43,28 @@
       <x-badge :status="$b->status"/>
     </div>
 
-    <dl class="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mt-2">
-      <div><dt class="text-gray-500">Sewerage</dt><dd>{{ number_format($sewerage,2) }}</dd></div>
-      <div><dt class="text-gray-500">Usage (units)</dt><dd>{{ $usage }} × {{ number_format($unitPrice,2) }}</dd></div>
-      <div><dt class="text-gray-500">Carry Forward</dt><dd>{{ number_format($carry,2) }}</dd></div>
-      <div><dt class="text-gray-500">Total</dt><dd class="font-semibold">{{ number_format($total,2) }}</dd></div>
+    {{-- Add Service line + adjust columns --}}
+    <dl class="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm mt-2">
+      <div>
+        <dt class="text-gray-500">Sewerage</dt>
+        <dd>{{ number_format($sewerage,2) }}</dd>
+      </div>
+      <div>
+        <dt class="text-gray-500">Service</dt>
+        <dd>{{ number_format($service,2) }}</dd>
+      </div>
+      <div>
+        <dt class="text-gray-500">Usage (units)</dt>
+        <dd>{{ $usage }} × {{ number_format($unitPrice,2) }}</dd>
+      </div>
+      <div>
+        <dt class="text-gray-500">Carry Forward</dt>
+        <dd>{{ number_format($carry,2) }}</dd>
+      </div>
+      <div>
+        <dt class="text-gray-500">Total</dt>
+        <dd class="font-semibold">{{ number_format($total,2) }}</dd>
+      </div>
     </dl>
 
     @if($b->status !== 'Approved')

@@ -6,12 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\HouseRental;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class HouseBillApproveController extends Controller
 {
     public function approve(Request $request, int $id)
     {
-        // -------- BULK --------
+        // ---------- BULK ----------
         if ($request->boolean('bulk')) {
             $data = $request->validate([
                 'ids'           => ['required','array','min:1'],
@@ -21,58 +22,62 @@ class HouseBillApproveController extends Controller
 
             $method = $data['paymentMethod'];
 
-            $bills = HouseRental::whereIn('id', $data['ids'])->get();
-            foreach ($bills as $bill) {
-                if ($bill->paidAmount < $bill->billAmount) {
-                    // Skip not-fully-paid rows
-                    continue;
-                }
-                $bill->update([
-                    // don't touch paidAmount here
-                    'paymentMethod' => $method,
-                    'status'        => 'Approved',
-                ]);
+            DB::transaction(function () use ($data, $method) {
+                $bills = HouseRental::whereIn('id', $data['ids'])->lockForUpdate()->get();
 
-                $this->approveCascade($bill);
-            }
+                foreach ($bills as $bill) {
+                    // If CASH, mark this month fully paid
+                    if ($method === 'cash' && (float)$bill->paidAmount < (float)$bill->billAmount) {
+                        $bill->paidAmount = (float)$bill->billAmount;
+                    }
+
+                    $bill->paymentMethod = $method;
+                    $bill->status        = 'Approved';
+                    $bill->save();
+
+                    // Keep your existing conditional cascade rule
+                    $this->conditionallyApproveEarlier($bill);
+                }
+            });
 
             return back()->with('success', 'Selected bills approved.');
         }
 
-        // -------- SINGLE --------
+        // ---------- SINGLE ----------
         $data = $request->validate([
-            // optional: allow editing paid amount; if omitted, keep as-is
-            'paidAmount'    => ['nullable','numeric','min:0'],
             'paymentMethod' => ['required', Rule::in(['cash','card','online'])],
             'recipt'        => ['nullable','file','mimes:jpg,jpeg,png,pdf','max:2048'],
         ]);
 
-        $bill = HouseRental::findOrFail($id);
+        DB::transaction(function () use ($request, $data, $id) {
+            $bill = HouseRental::lockForUpdate()->findOrFail($id);
 
-        if ($request->hasFile('recipt')) {
-            $bill->recipt = $request->file('recipt')->store('receipts', 'public');
-        }
+            if ($request->hasFile('recipt')) {
+                $path = $request->file('recipt')->store('receipts', 'public');
+                $bill->recipt = $path;
+            }
 
-        if (array_key_exists('paidAmount', $data) && $data['paidAmount'] !== null) {
-            $bill->paidAmount = min((float)$data['paidAmount'], (float)$bill->billAmount);
-        }
+            // If CASH, mark this month fully paid
+            if ($data['paymentMethod'] === 'cash' && (float)$bill->paidAmount < (float)$bill->billAmount) {
+                $bill->paidAmount = (float)$bill->billAmount;
+            }
 
-        if ($bill->paidAmount < $bill->billAmount) {
-            return back()->withErrors('Cannot approve: bill is not fully paid yet.');
-        }
+            $bill->paymentMethod = $data['paymentMethod'];
+            $bill->status        = 'Approved';
+            $bill->save();
 
-        $bill->paymentMethod = $data['paymentMethod'];
-        $bill->status        = 'Approved';
-        $bill->save();
-
-        $this->approveCascade($bill);
+            // Keep your existing conditional cascade rule
+            $this->conditionallyApproveEarlier($bill);
+        });
 
         return back()->with('success', 'Bill approved.');
     }
 
     public function reject(Request $request, int $id)
     {
-        $request->validate(['reason' => ['required','string','max:1000']]);
+        $request->validate([
+            'reason' => ['required','string','max:1000'],
+        ]);
 
         $bill = HouseRental::findOrFail($id);
         $bill->status = 'Rejected';
@@ -81,16 +86,30 @@ class HouseBillApproveController extends Controller
         return back()->with('success', 'Bill rejected.');
     }
 
-    protected function approveCascade(HouseRental $bill): void
+    /**
+     * Approve earlier months only when this approved bill is the latest month
+     * and its paidAmount covered carry + this month (unchanged from earlier).
+     */
+    protected function conditionallyApproveEarlier(HouseRental $approvedBill): void
     {
-        // Approve all earlier fully paid rows for the same house
-        HouseRental::where('houseNo', $bill->houseNo)
-            ->where('month', '<=', $bill->month)
+        $hasLaterOpen = HouseRental::where('houseNo', $approvedBill->houseNo)
+            ->where('month', '>', $approvedBill->month)
             ->where('status', '!=', 'Approved')
-            ->whereColumn('paidAmount', '>=', 'billAmount')
-            ->update([
-                'status'        => 'Approved',
-                'paymentMethod' => $bill->paymentMethod,
-            ]);
+            ->exists();
+
+        if ($hasLaterOpen) return;
+
+        $carry = (float) HouseRental::where('houseNo', $approvedBill->houseNo)
+            ->where('month', '<', $approvedBill->month)
+            ->get()
+            ->sum(fn ($r) => max(0, (float)$r->billAmount - (float)$r->paidAmount));
+
+        $required = $carry + (float) $approvedBill->billAmount;
+        if ((float)$approvedBill->paidAmount + 0.01 >= $required) {
+            HouseRental::where('houseNo', $approvedBill->houseNo)
+                ->where('month', '<', $approvedBill->month)
+                ->where('status', '!=', 'Approved')
+                ->update(['status' => 'Approved']);
+        }
     }
 }

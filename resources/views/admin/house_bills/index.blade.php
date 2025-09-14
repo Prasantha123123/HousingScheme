@@ -45,6 +45,7 @@
 @php
   $unitPrice = (float)\App\Models\Setting::get('water_unit_price', 0);
   $sewerage  = (float)\App\Models\Setting::get('sewerage_charge', 0);
+  $service   = (float)\App\Models\Setting::get('service_charge', 0);  // NEW
 @endphp
 
 {{-- ========= Mobile: Cards ========= --}}
@@ -81,6 +82,10 @@
           <div>{{ number_format($unitPrice,2) }}</div>
         </div>
         <div>
+          <div class="text-gray-500">Service</div> {{-- NEW --}}
+          <div>{{ number_format($service,2) }}</div>
+        </div>
+        <div class="text-right">
           <div class="text-gray-500">Method</div>
           <div class="uppercase">{{ $b->paymentMethod ?: '-' }}</div>
         </div>
@@ -123,7 +128,7 @@
           @else
             <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="inline">
               @csrf
-              {{-- DO NOT send paidAmount; keep per-month paid intact --}}
+              {{-- keep per-month paid intact --}}
               <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod ?: 'online' }}">
               <button class="text-green-700 text-sm">Approve</button>
             </form>
@@ -169,8 +174,9 @@
       <th class="px-3 py-2 text-right hidden md:table-cell">Usage</th>
       <th class="px-3 py-2 text-right hidden lg:table-cell">Sewerage</th>
       <th class="px-3 py-2 text-right hidden lg:table-cell">Unit Price</th>
+      <th class="px-3 py-2 text-right hidden lg:table-cell">Service</th> {{-- NEW --}}
       <th class="px-3 py-2 text-right">Bill</th>
-      <th class="px-3 py-2 text-right">Paid</th> {{-- visible always --}}
+      <th class="px-3 py-2 text-right">Paid</th>
       <th class="px-3 py-2 hidden lg:table-cell">Method</th>
       <th class="px-3 py-2 hidden lg:table-cell">Receipt</th>
       <th class="px-3 py-2">Status</th>
@@ -193,8 +199,9 @@
         <td class="px-3 py-2 text-right hidden md:table-cell">{{ $usage }}</td>
         <td class="px-3 py-2 text-right hidden lg:table-cell">{{ number_format($sewerage,2) }}</td>
         <td class="px-3 py-2 text-right hidden lg:table-cell">{{ number_format($unitPrice,2) }}</td>
+        <td class="px-3 py-2 text-right hidden lg:table-cell">{{ number_format($service,2) }}</td> {{-- NEW --}}
         <td class="px-3 py-2 text-right">{{ number_format($b->billAmount,2) }}</td>
-        <td class="px-3 py-2 text-right">{{ number_format($b->paidAmount,2) }}</td> {{-- visible --}}
+        <td class="px-3 py-2 text-right">{{ number_format($b->paidAmount,2) }}</td>
         <td class="px-3 py-2 hidden lg:table-cell uppercase">{{ $b->paymentMethod ?: '-' }}</td>
         <td class="px-3 py-2 hidden lg:table-cell">
           @if($b->recipt)
@@ -209,7 +216,6 @@
           @else
             <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="inline">
               @csrf
-              {{-- DO NOT send paidAmount; keep per-month paid intact --}}
               <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod ?: 'online' }}">
               <button class="text-green-700">Approve</button>
             </form>
