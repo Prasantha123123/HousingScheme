@@ -15,24 +15,48 @@ class ReportController extends Controller
 {
     public function index(Request $r)
     {
-        $from = Carbon::parse($r->get('from', now()->startOfMonth()));
-        $to   = Carbon::parse($r->get('to', now()->endOfMonth()));
+        // Normalize range (defaults to current month)
+        $from = $r->filled('from')
+            ? Carbon::parse($r->input('from'))->startOfDay()
+            : now()->startOfMonth()->startOfDay();
 
-        $houseIncome = HouseRental::whereBetween('timestamp', [$from,$to])->sum('paidAmount');
-        $shopIncome  = ShopRental::whereBetween('timestamp', [$from,$to])->sum('paidAmount');
-        $invIncome   = InventorySale::whereBetween('date', [$from,$to])->sum('total');
+        $to = $r->filled('to')
+            ? Carbon::parse($r->input('to'))->endOfDay()
+            : now()->endOfMonth()->endOfDay();
 
-        $payroll = Payroll::whereBetween('timestamp', [$from,$to])->sum('wage_net');
-        $other   = Expense::whereBetween('timestamp', [$from,$to])->sum('amount');
+        // INCOME: count only APPROVED money actually received
+        $houseIncome = (float) HouseRental::whereBetween('timestamp', [$from, $to])
+            ->where('status', 'Approved')
+            ->sum('paidAmount');
+
+        $shopIncome = (float) ShopRental::whereBetween('timestamp', [$from, $to])
+            ->where('status', 'Approved')
+            ->sum('paidAmount');
+
+        // If InventorySale.date is a DATE (no time), compare as date strings
+        $invIncome = (float) InventorySale::whereBetween('date', [
+            $from->toDateString(),
+            $to->toDateString(),
+        ])->sum('total');
+
+        // EXPENSES (adjust fields if needed)
+        $payroll = (float) Payroll::whereBetween('timestamp', [$from, $to])->sum('wage_net');
+        $other = (float) Expense::whereBetween('timestamp', [$from, $to])->sum('amount');
 
         return view('admin.reports.index', [
-            'from'=>$from->toDateString(),
-            'to'=>$to->toDateString(),
-            'income'=>[
-                'house'=>$houseIncome, 'shop'=>$shopIncome, 'inventory'=>$invIncome,
-                'total'=>$houseIncome+$shopIncome+$invIncome,
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
+            'income' => [
+                'house' => $houseIncome,
+                'shop' => $shopIncome,
+                'inventory' => $invIncome,
+                'total' => $houseIncome + $shopIncome + $invIncome,
             ],
-            'expense'=>['payroll'=>$payroll, 'other'=>$other, 'total'=>$payroll+$other],
+            'expense' => [
+                'payroll' => $payroll,
+                'other' => $other,
+                'total' => $payroll + $other,
+            ],
         ]);
     }
 }

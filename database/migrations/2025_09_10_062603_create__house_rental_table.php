@@ -20,7 +20,7 @@ return new class extends Migration {
             $table->string('recipt')->nullable();
 
             // 👇 NEW status + timestamps
-            $table->enum('status', ['Pending','InProgress','Approved','Rejected'])->default('Pending');
+            $table->enum('status', ['Pending','InProgress','PartPayment','ExtraPayment','Approved','Rejected'])->default('Pending');
             $table->timestamp('customer_paid_at')->nullable(); // when customer submits payment (receipt/card)
             $table->timestamp('approved_at')->nullable();      // when admin approves
 

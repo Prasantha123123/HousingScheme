@@ -2,6 +2,8 @@
 @extends('layouts.app')
 
 @section('content')
+<style>[x-cloak]{display:none!important}</style>
+
 <h1 class="text-xl font-semibold mb-3">My Bills</h1>
 
 @php
@@ -34,6 +36,7 @@
     $usage = max(0, $b->readingUnit - $b->openingReadingUnit);
     $carry = $calc[$b->id]['carry']  ?? 0;
     $total = $calc[$b->id]['total']  ?? ($sewerage + $service + $usage * $unitPrice); // include service in fallback
+    $totalValue = number_format($total, 2, '.', ''); // clean numeric for input value
     $canPay = ($b->id === $latestPending) && $b->status !== 'Approved';
   @endphp
 
@@ -69,33 +72,59 @@
 
     @if($b->status !== 'Approved')
       <div class="mt-3" x-data="{ method: '{{ $b->paymentMethod === 'card' ? 'card' : 'online' }}' }">
-        <div class="max-w-xl grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
-          <label class="sm:col-span-1">
+        {{-- One-row grid: Method | Amount | Bank Ref | Receipt (receipt collapses on mobile) --}}
+        <div class="max-w-4xl grid grid-cols-1 sm:grid-cols-6 gap-3 items-end" x-cloak>
+          {{-- Payment Method --}}
+          <label class="sm:col-span-2">
             <span class="text-sm text-gray-600">Payment Method</span>
-            <select x-model="method" class="mt-1 w-full rounded border-gray-300" @disabled(!$canPay)>
+            <select x-model="method" class="mt-1 w-full rounded border-gray-300 h-10" @disabled(!$canPay)>
               <option value="card">Card</option>
               <option value="online">Bank Transfer</option>
             </select>
           </label>
 
-          <div class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-2" x-show="method==='online'">
-            <label class="sm:col-span-1">
-              <span class="text-sm text-gray-600">Bank Ref</span>
-              <input name="reference" form="pay-form-{{ $b->id }}"
-                     class="mt-1 w-full rounded border-gray-300"
-                     placeholder="e.g. HSC-12345"
-                     :required="method==='online'"
-                     @disabled(!$canPay)>
-            </label>
-            <label class="sm:col-span-2">
-              <span class="text-sm text-gray-600">Receipt (PDF/JPG/PNG, ≤5MB)</span>
-              <input type="file" name="recipt" form="pay-form-{{ $b->id }}"
-                     class="mt-1 block w-full text-sm"
-                     accept="application/pdf,image/png,image/jpeg"
-                     :required="method==='online'"
-                     @disabled(!$canPay)>
-            </label>
-          </div>
+          {{-- Paid Amount --}}
+          <label class="sm:col-span-1">
+            <span class="text-sm text-gray-600">Paid Amount</span>
+            <input
+              name="amount"
+              form="pay-form-{{ $b->id }}"
+              type="number"
+              step="0.01"
+              min="0"
+              class="mt-1 w-full rounded border-gray-300 h-10"
+              value="{{ $totalValue }}"
+              placeholder="{{ $totalValue }}"
+              @disabled(!$canPay)
+            >
+          </label>
+
+          {{-- Bank Ref (only when online) --}}
+          <label class="sm:col-span-2" x-show="method==='online'">
+            <span class="text-sm text-gray-600">Bank Ref</span>
+            <input
+              name="reference"
+              form="pay-form-{{ $b->id }}"
+              class="mt-1 w-full rounded border-gray-300 h-10"
+              placeholder="e.g. HSC-12345"
+              :required="method==='online'"
+              @disabled(!$canPay)
+            >
+          </label>
+
+          {{-- Receipt (only when online) --}}
+          <label class="sm:col-span-1" x-show="method==='online'">
+            <span class="text-sm text-gray-600">Receipt (PDF/JPG/PNG, ≤5MB)</span>
+            <input
+              type="file"
+              name="recipt"
+              form="pay-form-{{ $b->id }}"
+              class="mt-1 block w-full text-sm"
+              accept="application/pdf,image/png,image/jpeg"
+              :required="method==='online'"
+              @disabled(!$canPay)
+            >
+          </label>
         </div>
 
         <form id="pay-form-{{ $b->id }}" method="post" enctype="multipart/form-data"

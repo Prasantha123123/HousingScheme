@@ -19,7 +19,7 @@ class UserSeeder extends Seeder
                 'address' => 'HQ',
                 'NIC' => '000000000V',
                 'email_verified_at' => now(),
-                'password' => Hash::make('password'), // change in production
+                'password' => Hash::make('password'), 
             ]
         );
 

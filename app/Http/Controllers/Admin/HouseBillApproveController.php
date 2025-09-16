@@ -26,7 +26,7 @@ class HouseBillApproveController extends Controller
                 $bills = HouseRental::whereIn('id', $data['ids'])->lockForUpdate()->get();
 
                 foreach ($bills as $bill) {
-                    // If CASH, mark this month fully paid
+                    // If CASH in bulk, mark this month fully paid (no per-row amount in bulk)
                     if ($method === 'cash' && (float)$bill->paidAmount < (float)$bill->billAmount) {
                         $bill->paidAmount = (float)$bill->billAmount;
                     }
@@ -35,7 +35,6 @@ class HouseBillApproveController extends Controller
                     $bill->status        = 'Approved';
                     $bill->save();
 
-                    // Keep your existing conditional cascade rule
                     $this->conditionallyApproveEarlier($bill);
                 }
             });
@@ -46,6 +45,7 @@ class HouseBillApproveController extends Controller
         // ---------- SINGLE ----------
         $data = $request->validate([
             'paymentMethod' => ['required', Rule::in(['cash','card','online'])],
+            'paidAmount'    => ['nullable','numeric','min:0'],
             'recipt'        => ['nullable','file','mimes:jpg,jpeg,png,pdf','max:2048'],
         ]);
 
@@ -57,8 +57,12 @@ class HouseBillApproveController extends Controller
                 $bill->recipt = $path;
             }
 
-            // If CASH, mark this month fully paid
-            if ($data['paymentMethod'] === 'cash' && (float)$bill->paidAmount < (float)$bill->billAmount) {
+            // If user provided a paid amount (from the modal), record exactly that
+            if (array_key_exists('paidAmount', $data) && $data['paidAmount'] !== null) {
+                $bill->paidAmount = (float) $data['paidAmount'];
+            }
+            // Otherwise: for CASH fallback to full for the month
+            elseif ($data['paymentMethod'] === 'cash' && (float)$bill->paidAmount < (float)$bill->billAmount) {
                 $bill->paidAmount = (float)$bill->billAmount;
             }
 
@@ -66,7 +70,6 @@ class HouseBillApproveController extends Controller
             $bill->status        = 'Approved';
             $bill->save();
 
-            // Keep your existing conditional cascade rule
             $this->conditionallyApproveEarlier($bill);
         });
 
@@ -87,8 +90,8 @@ class HouseBillApproveController extends Controller
     }
 
     /**
-     * Approve earlier months only when this approved bill is the latest month
-     * and its paidAmount covered carry + this month (unchanged from earlier).
+     * Approve earlier months when this approved bill is the latest month
+     * and its paidAmount covered carry + this month.
      */
     protected function conditionallyApproveEarlier(HouseRental $approvedBill): void
     {
@@ -105,6 +108,7 @@ class HouseBillApproveController extends Controller
             ->sum(fn ($r) => max(0, (float)$r->billAmount - (float)$r->paidAmount));
 
         $required = $carry + (float) $approvedBill->billAmount;
+
         if ((float)$approvedBill->paidAmount + 0.01 >= $required) {
             HouseRental::where('houseNo', $approvedBill->houseNo)
                 ->where('month', '<', $approvedBill->month)

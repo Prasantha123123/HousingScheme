@@ -1,3 +1,4 @@
+{{-- resources/views/admin/house_bills/index.blade.php --}}
 @extends('layouts.app')
 
 @section('content')
@@ -28,7 +29,7 @@
     Tip: select items and use <span class="font-medium">Bulk Approve</span>.
   </div>
 
-  {{-- BULK APPROVE --}}
+  {{-- BULK APPROVE (kept as-is; supports all methods) --}}
   <form method="post" action="{{ route('admin.house-bills.approve', ['id' => 0]) }}" id="bulk-approve-form" class="flex items-center gap-2">
     @csrf
     <input type="hidden" name="bulk" value="1">
@@ -45,7 +46,7 @@
 @php
   $unitPrice = (float)\App\Models\Setting::get('water_unit_price', 0);
   $sewerage  = (float)\App\Models\Setting::get('sewerage_charge', 0);
-  $service   = (float)\App\Models\Setting::get('service_charge', 0);  // NEW
+  $service   = (float)\App\Models\Setting::get('service_charge', 0);
 @endphp
 
 {{-- ========= Mobile: Cards ========= --}}
@@ -82,7 +83,7 @@
           <div>{{ number_format($unitPrice,2) }}</div>
         </div>
         <div>
-          <div class="text-gray-500">Service</div> {{-- NEW --}}
+          <div class="text-gray-500">Service</div>
           <div>{{ number_format($service,2) }}</div>
         </div>
         <div class="text-right">
@@ -122,24 +123,49 @@
             <a class="text-blue-600 hover:underline text-sm" target="_blank" href="{{ asset('storage/'.$b->recipt) }}">Open</a>
           @endif
 
-          {{-- INSTANT APPROVE: disabled if already Approved --}}
+          {{-- Approve: CASH-only modal if method not set --}}
           @if($b->status === 'Approved')
             <button class="text-green-700 text-sm opacity-40 cursor-not-allowed" disabled>Approve</button>
           @else
-            <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="inline">
-              @csrf
-              {{-- keep per-month paid intact --}}
-              <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod ?: 'online' }}">
-              <button class="text-green-700 text-sm">Approve</button>
-            </form>
+            @if(empty($b->paymentMethod))
+              <button type="button" class="text-green-700 text-sm" x-data @click="$dispatch('open-modal','approve-{{ $b->id }}')">
+                Approve
+              </button>
+            @else
+              <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="inline">
+                @csrf
+                <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod }}">
+                <button class="text-green-700 text-sm">Approve</button>
+              </form>
+            @endif
           @endif
 
-          {{-- Reject (kept as-is) --}}
+          {{-- Reject --}}
           <button type="button" class="text-red-700 text-sm" x-data
                   @click="$dispatch('open-modal','reject-{{ $b->id }}')">Reject</button>
         </div>
       </div>
     </div>
+
+    {{-- CASH-ONLY Approve modal (mobile) --}}
+    @if($b->status !== 'Approved' && empty($b->paymentMethod))
+      <x-modal :name="'approve-'.$b->id" :title="'Approve Bill #'.$b->id">
+        <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="space-y-3">
+          @csrf
+          <input type="hidden" name="paymentMethod" value="cash">
+          <p class="text-sm text-gray-600">Recording a <span class="font-medium">cash</span> payment.</p>
+          <label class="block">
+            <span class="text-sm">Paid Amount</span>
+            <input type="number" name="paidAmount" step="0.01" min="0"
+                   value="{{ old('paidAmount', $b->paidAmount > 0 ? $b->paidAmount : $b->billAmount) }}"
+                   class="mt-1 w-full rounded border-gray-300" required>
+          </label>
+          <div class="text-right">
+            <button class="px-3 py-2 bg-green-600 text-white rounded-lg">Approve</button>
+          </div>
+        </form>
+      </x-modal>
+    @endif
 
     {{-- Reject modal (mobile) --}}
     <x-modal :name="'reject-'.$b->id" :title="'Reject Bill #'.$b->id">
@@ -174,7 +200,7 @@
       <th class="px-3 py-2 text-right hidden md:table-cell">Usage</th>
       <th class="px-3 py-2 text-right hidden lg:table-cell">Sewerage</th>
       <th class="px-3 py-2 text-right hidden lg:table-cell">Unit Price</th>
-      <th class="px-3 py-2 text-right hidden lg:table-cell">Service</th> {{-- NEW --}}
+      <th class="px-3 py-2 text-right hidden lg:table-cell">Service</th>
       <th class="px-3 py-2 text-right">Bill</th>
       <th class="px-3 py-2 text-right">Paid</th>
       <th class="px-3 py-2 hidden lg:table-cell">Method</th>
@@ -199,7 +225,7 @@
         <td class="px-3 py-2 text-right hidden md:table-cell">{{ $usage }}</td>
         <td class="px-3 py-2 text-right hidden lg:table-cell">{{ number_format($sewerage,2) }}</td>
         <td class="px-3 py-2 text-right hidden lg:table-cell">{{ number_format($unitPrice,2) }}</td>
-        <td class="px-3 py-2 text-right hidden lg:table-cell">{{ number_format($service,2) }}</td> {{-- NEW --}}
+        <td class="px-3 py-2 text-right hidden lg:table-cell">{{ number_format($service,2) }}</td>
         <td class="px-3 py-2 text-right">{{ number_format($b->billAmount,2) }}</td>
         <td class="px-3 py-2 text-right">{{ number_format($b->paidAmount,2) }}</td>
         <td class="px-3 py-2 hidden lg:table-cell uppercase">{{ $b->paymentMethod ?: '-' }}</td>
@@ -210,21 +236,50 @@
         </td>
         <td class="px-3 py-2"><x-badge :status="$b->status"/></td>
         <td class="px-3 py-2 text-right whitespace-nowrap">
-          {{-- INSTANT APPROVE (disabled if already Approved) --}}
+          {{-- Approve: CASH-only modal if method not set --}}
           @if($b->status === 'Approved')
             <button class="text-green-700 opacity-40 cursor-not-allowed" disabled>Approve</button>
           @else
-            <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="inline">
-              @csrf
-              <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod ?: 'online' }}">
-              <button class="text-green-700">Approve</button>
-            </form>
+            @if(empty($b->paymentMethod))
+              <button type="button" class="text-green-700" x-data @click="$dispatch('open-modal','approve-{{ $b->id }}')">
+                Approve
+              </button>
+            @else
+              <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="inline">
+                @csrf
+                <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod }}">
+                <button class="text-green-700">Approve</button>
+              </form>
+            @endif
           @endif
-          <span class="mx-2 text-gray-300">|</span>
-          <button type="button" class="text-red-700" x-data
-                  @click="$dispatch('open-modal','reject-{{ $b->id }}')">Reject</button>
+
+          @if($b->status !== 'Approved')
+            <span class="mx-2 text-gray-300">|</span>
+            <button type="button" class="text-red-700" x-data
+                    @click="$dispatch('open-modal','reject-{{ $b->id }}')">Reject</button>
+          @endif
         </td>
       </tr>
+
+      {{-- CASH-ONLY Approve modal (desktop) --}}
+      @if($b->status !== 'Approved' && empty($b->paymentMethod))
+        <x-modal :name="'approve-'.$b->id" :title="'Approve Bill #'.$b->id">
+          <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="space-y-3">
+            @csrf
+            <input type="hidden" name="paymentMethod" value="cash">
+            <p class="text-sm text-gray-600">Recording a <span class="font-medium">cash</span> payment.</p>
+            <label class="block">
+              <span class="text-sm">Paid Amount</span>
+              <input type="number" name="paidAmount" step="0.01" min="0"
+                     value="{{ old('paidAmount', $b->paidAmount > 0 ? $b->paidAmount : $b->billAmount) }}"
+                     class="mt-1 w-full rounded border-gray-300" required>
+            </label>
+            <div class="text-right">
+              <button class="px-3 py-2 bg-green-600 text-white rounded-lg">Approve</button>
+            </div>
+          </form>
+        </x-modal>
+      @endif
 
       {{-- Reject modal (desktop) --}}
       <x-modal :name="'reject-'.$b->id" :title="'Reject Bill #'.$b->id">
