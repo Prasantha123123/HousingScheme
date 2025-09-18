@@ -40,6 +40,14 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+        'house' => [
+            'driver' => 'session',
+            'provider' => 'houses',
+        ],
+        'shop' => [
+            'driver' => 'session',
+            'provider' => 'shops',
+        ],
     ],
 
     /*
@@ -63,6 +71,16 @@ return [
         'users' => [
             'driver' => 'eloquent',
             'model' => env('AUTH_MODEL', App\Models\User::class),
+        ],
+
+        'houses' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\House::class,
+        ],
+
+        'shops' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\Shop::class,
         ],
 
         // 'users' => [

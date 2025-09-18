@@ -1,4 +1,6 @@
+{{-- resources/views/admin/houses/create.blade.php --}}
 @extends('layouts.app')
+
 @section('content')
 <h1 class="text-xl font-semibold mb-3">Add House</h1>
 
@@ -14,9 +16,9 @@
     </label>
 
     <label class="block">
-      <span class="text-sm">Owner (Houseowner)</span>
-      <select name="HouseOwneId" class="mt-1 w-full rounded border-gray-300" required>
-        <option value="">Select owner…</option>
+      <span class="text-sm">Owner (Houseowner) — optional</span>
+      <select name="HouseOwneId" class="mt-1 w-full rounded border-gray-300">
+        <option value="">No owner</option>
         @foreach($owners as $o)
           <option value="{{ $o->id }}" @selected(old('HouseOwneId')==$o->id)>
             {{ $o->name }} — {{ $o->email }}
@@ -24,6 +26,13 @@
         @endforeach
       </select>
       @error('HouseOwneId') <p class="text-red-600 text-sm mt-1">{{ $message }}</p> @enderror
+    </label>
+
+    <label class="block">
+      <span class="text-sm">House Password</span>
+      <input name="house_password" type="password" class="mt-1 w-full rounded border-gray-300"
+             placeholder="Required if no owner selected">
+      @error('house_password') <p class="text-red-600 text-sm mt-1">{{ $message }}</p> @enderror
     </label>
   </div>
 

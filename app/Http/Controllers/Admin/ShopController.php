@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Shop;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
 class ShopController extends Controller
@@ -30,7 +31,7 @@ class ShopController extends Controller
     {
         $merchants = User::where('role', 'Merchant')
             ->orderBy('name')
-            ->get(['id','name']);
+            ->get(['id','name','email']);
 
         return view('admin.shops.create', compact('merchants'));
     }
@@ -40,12 +41,20 @@ class ShopController extends Controller
         $data = $request->validate([
             'shopNumber'   => ['required','string','max:50', Rule::unique('Shops','shopNumber')],
             'MerchantId'   => [
-                'required','integer',
+                'nullable','integer',
                 Rule::exists('users','id')->where(fn($q) => $q->where('role','Merchant')),
+                // (No unique rule here → one merchant can own multiple shops if you want)
             ],
             'leaseEnd'     => ['nullable','date'],
             'rentalAmount' => ['required','numeric','min:0'],
+            'shop_password'=> ['required_without:MerchantId','nullable','string','min:6'], // required if no merchant
+        ], [
+            'shop_password.required_without' => 'Set a shop password when no merchant is selected.',
         ]);
+
+        if (!empty($data['shop_password'])) {
+            $data['shop_password'] = Hash::make($data['shop_password']);
+        }
 
         Shop::create($data);
 
@@ -58,7 +67,7 @@ class ShopController extends Controller
 
         $merchants = User::where('role', 'Merchant')
             ->orderBy('name')
-            ->get(['id','name']);
+            ->get(['id','name','email']);
 
         return view('admin.shops.edit', compact('shop','merchants'));
     }
@@ -68,14 +77,20 @@ class ShopController extends Controller
         $shop = Shop::findOrFail($shopNumber);
 
         $data = $request->validate([
-            // keep PK unchanged; allow updating owner, lease end, and amount
             'MerchantId'   => [
-                'required','integer',
+                'nullable','integer',
                 Rule::exists('users','id')->where(fn($q) => $q->where('role','Merchant')),
             ],
             'leaseEnd'     => ['nullable','date'],
             'rentalAmount' => ['required','numeric','min:0'],
+            'shop_password'=> ['nullable','string','min:6'], // optional on edit
         ]);
+
+        if (!empty($data['shop_password'])) {
+            $data['shop_password'] = Hash::make($data['shop_password']);
+        } else {
+            unset($data['shop_password']); // don't overwrite
+        }
 
         $shop->update($data);
 
@@ -86,7 +101,7 @@ class ShopController extends Controller
     {
         $shop = Shop::findOrFail($shopNumber);
 
-        // Optionally block delete if rentals exist for this shop
+        // Optional guard:
         // if (\App\Models\ShopRental::where('shopNumber', $shopNumber)->exists()) {
         //     return back()->withErrors('Cannot delete: rentals exist for this shop.');
         // }

@@ -10,7 +10,7 @@
   <input class="rounded border-gray-300 w-full" type="month" name="month" value="{{ request('month') }}">
   <select name="status" class="rounded border-gray-300 w-full">
     <option value="">All Status</option>
-    @foreach (['Pending','Approved','Rejected'] as $s)
+    @foreach (['Pending','PartPayment','ExtraPayment','Approved','Rejected'] as $s)
       <option @selected(request('status') === $s)>{{ $s }}</option>
     @endforeach
   </select>
@@ -29,7 +29,7 @@
     Tip: select items and use <span class="font-medium">Bulk Approve</span>.
   </div>
 
-  {{-- BULK APPROVE (kept as-is; supports all methods) --}}
+  {{-- BULK APPROVE --}}
   <form method="post" action="{{ route('admin.house-bills.approve', ['id' => 0]) }}" id="bulk-approve-form" class="flex items-center gap-2">
     @csrf
     <input type="hidden" name="bulk" value="1">
@@ -52,7 +52,10 @@
 {{-- ========= Mobile: Cards ========= --}}
 <div class="sm:hidden space-y-3">
   @forelse($bills ?? [] as $b)
-    @php $usage = max(0, ($b->readingUnit - $b->openingReadingUnit)); @endphp
+    @php
+      $usage   = max(0, ($b->readingUnit - $b->openingReadingUnit));
+      $balance = max(0, (float)$b->billAmount - (float)$b->paidAmount);
+    @endphp
     <div class="rounded-lg border bg-white p-3 shadow-sm">
       <div class="flex items-start justify-between gap-3">
         <div>
@@ -96,14 +99,18 @@
         </div>
       </div>
 
-      <div class="mt-3 grid grid-cols-2 gap-2 items-end">
+      <div class="mt-3 grid grid-cols-3 gap-2 items-end">
         <div>
           <div class="text-xs text-gray-500">Bill</div>
           <div class="text-base font-semibold">{{ number_format($b->billAmount,2) }}</div>
         </div>
-        <div class="text-right">
+        <div class="text-center">
           <div class="text-xs text-gray-500">Paid</div>
           <div class="text-base font-semibold">{{ number_format($b->paidAmount,2) }}</div>
+        </div>
+        <div class="text-right">
+          <div class="text-xs text-gray-500">Balance</div>
+          <div class="text-base font-semibold">{{ number_format($balance,2) }}</div>
         </div>
       </div>
 
@@ -198,11 +205,9 @@
       <th class="px-3 py-2 text-left">Month</th>
       <th class="px-3 py-2 text-left hidden md:table-cell">Reading</th>
       <th class="px-3 py-2 text-right hidden md:table-cell">Usage</th>
-      <th class="px-3 py-2 text-right hidden lg:table-cell">Sewerage</th>
-      <th class="px-3 py-2 text-right hidden lg:table-cell">Unit Price</th>
-      <th class="px-3 py-2 text-right hidden lg:table-cell">Service</th>
-      <th class="px-3 py-2 text-right">Bill</th>
+       <th class="px-3 py-2 text-right">Bill</th>
       <th class="px-3 py-2 text-right">Paid</th>
+      <th class="px-3 py-2 text-right">Balance</th>
       <th class="px-3 py-2 hidden lg:table-cell">Method</th>
       <th class="px-3 py-2 hidden lg:table-cell">Receipt</th>
       <th class="px-3 py-2">Status</th>
@@ -210,7 +215,10 @@
     </x-slot:head>
 
     @forelse($bills ?? [] as $b)
-      @php $usage = max(0, ($b->readingUnit - $b->openingReadingUnit)); @endphp
+      @php
+        $usage   = max(0, ($b->readingUnit - $b->openingReadingUnit));
+        $balance = max(0, (float)$b->billAmount - (float)$b->paidAmount);
+      @endphp
       <tr class="hover:bg-gray-50">
         <td class="px-3 py-2">
           <input form="bulk-approve-form"
@@ -223,11 +231,9 @@
         <td class="px-3 py-2">{{ $b->month }}</td>
         <td class="px-3 py-2 hidden md:table-cell">{{ $b->openingReadingUnit }} → {{ $b->readingUnit }}</td>
         <td class="px-3 py-2 text-right hidden md:table-cell">{{ $usage }}</td>
-        <td class="px-3 py-2 text-right hidden lg:table-cell">{{ number_format($sewerage,2) }}</td>
-        <td class="px-3 py-2 text-right hidden lg:table-cell">{{ number_format($unitPrice,2) }}</td>
-        <td class="px-3 py-2 text-right hidden lg:table-cell">{{ number_format($service,2) }}</td>
         <td class="px-3 py-2 text-right">{{ number_format($b->billAmount,2) }}</td>
         <td class="px-3 py-2 text-right">{{ number_format($b->paidAmount,2) }}</td>
+        <td class="px-3 py-2 text-right">{{ number_format($balance,2) }}</td>
         <td class="px-3 py-2 hidden lg:table-cell uppercase">{{ $b->paymentMethod ?: '-' }}</td>
         <td class="px-3 py-2 hidden lg:table-cell">
           @if($b->recipt)
@@ -236,7 +242,6 @@
         </td>
         <td class="px-3 py-2"><x-badge :status="$b->status"/></td>
         <td class="px-3 py-2 text-right whitespace-nowrap">
-          {{-- Approve: CASH-only modal if method not set --}}
           @if($b->status === 'Approved')
             <button class="text-green-700 opacity-40 cursor-not-allowed" disabled>Approve</button>
           @else
@@ -295,7 +300,7 @@
         </form>
       </x-modal>
     @empty
-      <tr><td class="px-3 py-6 text-gray-500" colspan="13">No data</td></tr>
+      <tr><td class="px-3 py-6 text-gray-500" colspan="14">No data</td></tr>
     @endforelse
   </x-table>
 </div>

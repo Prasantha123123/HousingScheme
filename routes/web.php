@@ -2,6 +2,10 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\House\BillController as HouseBillController;
+use App\Http\Controllers\House\BillPayController as HouseBillPayController;
+use App\Http\Controllers\Shop\RentalController as ShopRentalController;
+use App\Http\Controllers\Shop\RentalPayController as ShopRentalPayController;
 
 // Safely include Breeze/Fortify auth routes if they exist
 $authFile = __DIR__ . '/auth.php';
@@ -129,4 +133,30 @@ Route::middleware(['auth'])->group(function () {
     Route::middleware('role:Employee')->get('/employee', function () {
         return 'Employee portal';
     })->name('employee.home');
+});
+
+// ----- House Guard Routes (auth:house) -----
+Route::middleware(['auth:house'])->prefix('house')->as('house.')->group(function () {
+    Route::get('/dashboard', function () {
+        $house = auth('house')->user();
+        return view('house.dashboard', compact('house'));
+    })->name('dashboard');
+    
+    // House Bills - using dedicated controller
+    Route::get('/bills', [HouseBillController::class, 'index'])->name('bills');
+    Route::post('/bills/{id}/pay/transfer', [HouseBillPayController::class, 'transfer'])->name('bills.pay.transfer');
+    Route::post('/bills/{id}/pay/card', [HouseBillPayController::class, 'card'])->name('bills.pay.card');
+});
+
+// ----- Shop Guard Routes (auth:shop) -----
+Route::middleware(['auth:shop'])->prefix('shop')->as('shop.')->group(function () {
+    Route::get('/dashboard', function () {
+        $shop = auth('shop')->user();
+        return view('shop.dashboard', compact('shop'));
+    })->name('dashboard');
+    
+    // Shop Rentals - using dedicated controller
+    Route::get('/rentals', [ShopRentalController::class, 'index'])->name('rentals');
+    Route::post('/rentals/{id}/pay/transfer', [ShopRentalPayController::class, 'transfer'])->name('rentals.pay.transfer');
+    Route::post('/rentals/{id}/pay/card', [ShopRentalPayController::class, 'card'])->name('rentals.pay.card');
 });

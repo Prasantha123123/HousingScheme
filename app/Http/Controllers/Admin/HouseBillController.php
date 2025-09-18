@@ -27,15 +27,14 @@ class HouseBillController extends Controller
 
     /**
      * Generate bills for every house for the given month.
-     * Uses WaterReadings if present.
      * billAmount = sewerage + service + usage * unitPrice  (THIS MONTH ONLY)
      */
     public function generate(Request $request)
     {
         $month = $request->input('month', now()->format('Y-m'));   // 'YYYY-MM'
         $unitPrice = (float) Setting::get('water_unit_price', 0);
-        $sewerage = (float) Setting::get('sewerage_charge', 0);
-        $service = (float) Setting::get('service_charge', 0);
+        $sewerage  = (float) Setting::get('sewerage_charge', 0);
+        $service   = (float) Setting::get('service_charge', 0);
 
         foreach (House::all(['houseNo']) as $h) {
             if (HouseRental::where('houseNo', $h->houseNo)->where('month', $month)->exists()) {
@@ -64,19 +63,18 @@ class HouseBillController extends Controller
             $thisMonthCharge = $sewerage + $service + ($usage * $unitPrice);
 
             HouseRental::create([
-                'houseNo' => $h->houseNo,
-                'readingUnit' => $current,
-                'month' => $month,
+                'houseNo'            => $h->houseNo,
+                'readingUnit'        => $current,
+                'month'              => $month,
                 'openingReadingUnit' => $opening,
-                'billAmount' => $thisMonthCharge,  // only this month’s charge
-                'paidAmount' => 0,
-                'paymentMethod' => null,
-                'recipt' => null,
-                'status' => 'Pending',
-                'timestamp' => now(),
+                'billAmount'         => $thisMonthCharge,  // only this month’s charge
+                'paidAmount'         => 0,
+                'paymentMethod'      => null,
+                'recipt'             => null,
+                'status'             => 'Pending',
+                'timestamp'          => now(),
             ]);
 
-            // ✅ Mark the used reading as Approved (if present)
             if ($reading && $reading->status !== 'Approved') {
                 $reading->status = 'Approved';
                 $reading->save();

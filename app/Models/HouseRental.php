@@ -11,6 +11,12 @@ class HouseRental extends Model
 
     protected $fillable = [
         'houseNo','readingUnit','month','openingReadingUnit','billAmount',
-        'paidAmount','paymentMethod','recipt','status','timestamp'
+        'paidAmount','paymentMethod','recipt','status','timestamp','customer_paid_at','approved_at'
+    ];
+
+    protected $casts = [
+        'customer_paid_at' => 'datetime',
+        'approved_at' => 'datetime',
+        'timestamp' => 'datetime',
     ];
 }

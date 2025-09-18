@@ -12,7 +12,12 @@ class ShopRental extends Model
 
     protected $fillable = [
         'shopNumber','billAmount','month','paidAmount','paymentMethod',
-        'recipt','status','timestamp'
+        'recipt','status','timestamp','approved_at'
+    ];
+
+    protected $casts = [
+        'approved_at' => 'datetime',
+        'timestamp' => 'datetime',
     ];
 
     public function shop(): BelongsTo

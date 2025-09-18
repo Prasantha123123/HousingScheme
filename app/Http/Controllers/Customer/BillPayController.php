@@ -13,6 +13,7 @@ class BillPayController extends Controller
     public function transfer(Request $r, int $id)
     {
         $data = $r->validate([
+            'amount'    => ['required','numeric','min:0.01'],
             'reference' => ['required','string','max:100'],   // kept for UI; not stored
             'recipt'    => ['required','file','mimes:pdf,jpg,jpeg,png','max:5120'],
             'note'      => ['nullable','string','max:500'],
@@ -21,48 +22,62 @@ class BillPayController extends Controller
         $latest = HouseRental::findOrFail($id);
         $receiptPath = $r->file('recipt')->store('receipts', 'public');
 
-        return $this->payLatestWithCarry($latest, 'online', $receiptPath);
+        return $this->payLatestWithCarry($latest, 'online', $receiptPath, (float)$data['amount']);
     }
 
     /** Card – record payment on latest bill ONLY incl. carry */
     public function card(Request $r, int $id)
     {
+        $data = $r->validate([
+            'amount' => ['required','numeric','min:0.01'],
+        ]);
+
         $latest = HouseRental::findOrFail($id);
-        return $this->payLatestWithCarry($latest, 'card', null);
+        return $this->payLatestWithCarry($latest, 'card', null, (float)$data['amount']);
     }
 
     /**
-     * Record a payment on the latest month that covers all previous unpaid months.
-     * Earlier months remain with paidAmount=0; only the latest row gets (carry + current).
-     * Status on the latest row becomes InProgress (awaiting admin approval).
+     * Record a payment on the latest month that covers (part of) carry + current.
+     * Earlier months stay unchanged; admin approval will reconcile statuses.
+     * Row becomes InProgress until approved.
      */
-    protected function payLatestWithCarry(HouseRental $latest, string $method, ?string $receiptPath)
+    protected function payLatestWithCarry(HouseRental $latest, string $method, ?string $receiptPath, float $amount)
     {
-        // You can only settle the latest outstanding bill for that house
-        $hasLaterUnpaid = HouseRental::where('houseNo', $latest->houseNo)
-            ->where('month', '>', $latest->month)
-            ->whereColumn('paidAmount', '<', 'billAmount')
-            ->exists();
+        // You can only pay the latest outstanding bill for that house
+        $latestOpen = HouseRental::where('houseNo', $latest->houseNo)
+            ->where('status', '!=', 'Approved')
+            ->orderByDesc('month')
+            ->first();
 
-        if ($hasLaterUnpaid) {
-            return back()->withErrors('You can only pay the latest outstanding bill.');
+        if (!$latestOpen || $latestOpen->id !== $latest->id) {
+            return back()->withErrors(['amount' => 'You can only pay the latest outstanding bill.']);
         }
 
-        // Carry = sum of unpaid amounts BEFORE this month
+        // Optional: cap to outstanding (carry + current - already paid). If you prefer to allow
+        // overpayments (to become credit on approval), remove the min() line and just add $amount.
         $carry = HouseRental::where('houseNo', $latest->houseNo)
             ->where('month', '<', $latest->month)
             ->get()
             ->sum(fn (HouseRental $r) => max(0, (float)$r->billAmount - (float)$r->paidAmount));
 
-        $totalToPay = (float)$latest->billAmount + (float)$carry;
+        $totalDue     = (float)$latest->billAmount + $carry;
+        $alreadyPaid  = (float)$latest->paidAmount;
+        $outstanding  = max(0, $totalDue - $alreadyPaid);
+        $toApply      = min($amount, $outstanding); // prevent accidental overpay; remove if you want to allow credit
 
-        DB::transaction(function () use ($latest, $method, $receiptPath, $totalToPay) {
-            $latest->paymentMethod = $method;
+        if ($toApply <= 0) {
+            return back()->withErrors(['amount' => 'Nothing outstanding to pay.']);
+        }
+
+        DB::transaction(function () use ($latest, $method, $receiptPath, $toApply) {
+            $latest->paymentMethod     = $method;
             if ($receiptPath) {
                 $latest->recipt = $receiptPath;
             }
-            $latest->paidAmount = $totalToPay; // includes carry + current month
-            $latest->status     = 'InProgress';  // awaiting admin approval
+            // Add this payment to whatever was already paid (supports multiple part-payments)
+            $latest->paidAmount       = (float)$latest->paidAmount + $toApply;
+            $latest->status           = 'InProgress';   // waiting for admin approval
+            $latest->customer_paid_at = now();
             $latest->save();
         });
 

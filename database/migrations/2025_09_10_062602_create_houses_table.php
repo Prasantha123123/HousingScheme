@@ -6,13 +6,16 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
     public function up(): void {
-        Schema::create('houses', function (Blueprint $table) {
-            // No 'id' by request. Primary key by houseNo.
-            $table->unsignedBigInteger('HouseOwneId');
-            $table->string('houseNo')->primary();
-            $table->timestamp('timestamp')->useCurrent();
-        });
+Schema::create('houses', function (Blueprint $table) {
+    $table->string('houseNo')->primary();
+    $table->unsignedBigInteger('HouseOwneId')->nullable();
+    $table->string('house_password'); // hashed house password
+    $table->timestamp('timestamp')->useCurrent();
+    // optional FK if you want:
+    // $table->foreign('HouseOwneId')->references('id')->on('users')->nullOnDelete();
+});
     }
+
     public function down(): void {
         Schema::dropIfExists('houses');
     }
