@@ -66,6 +66,7 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/houses/{houseNo}', [App\Http\Controllers\Admin\HouseController::class, 'destroy'])->name('houses.destroy');
         // House Bills (HouseRental)
         Route::get('/house-bills', [App\Http\Controllers\Admin\HouseBillController::class, 'index'])->name('house-bills.index');
+        Route::get('/house-bills/pdf', [App\Http\Controllers\Admin\HouseBillController::class, 'downloadPdf'])->name('house-bills.pdf');
         Route::post('/house-bills/generate', [App\Http\Controllers\Admin\HouseBillController::class, 'generate'])->name('house-bills.generate');
         Route::post('/house-bills/{id}/approve', [App\Http\Controllers\Admin\HouseBillApproveController::class, 'approve'])->name('house-bills.approve');
         Route::post('/house-bills/{id}/reject', [App\Http\Controllers\Admin\HouseBillApproveController::class, 'reject'])->name('house-bills.reject');
@@ -78,6 +79,8 @@ Route::middleware(['auth'])->group(function () {
         // Shop Rentals
         Route::get('/shop-rentals', [App\Http\Controllers\Admin\ShopRentalController::class, 'index'])
             ->name('shop-rentals.index');
+        Route::get('/shop-rentals/pdf', [App\Http\Controllers\Admin\ShopRentalController::class, 'downloadPdf'])
+            ->name('shop-rentals.pdf');
         Route::post('/shop-rentals/generate', [App\Http\Controllers\Admin\ShopRentalController::class, 'generate'])
             ->name('shop-rentals.generate'); // <-- add this
         Route::post('/shop-rentals/{id}/approve', [App\Http\Controllers\Admin\ShopRentalApproveController::class, 'approve'])
@@ -88,6 +91,8 @@ Route::middleware(['auth'])->group(function () {
         // Inventory Sales
         Route::resource('inventory-sales', App\Http\Controllers\Admin\InventorySaleController::class)
             ->names('inventory-sales');
+        Route::get('/inventory-sales-pdf', [App\Http\Controllers\Admin\InventorySaleController::class, 'downloadPdf'])
+            ->name('inventory-sales.pdf');
 
         // Contracts
         Route::resource('contracts', App\Http\Controllers\Admin\ContractsController::class)
@@ -101,6 +106,8 @@ Route::middleware(['auth'])->group(function () {
         // Other Expenses
         Route::resource('expenses', App\Http\Controllers\Admin\ExpenseController::class)
             ->names('expenses')->except('show');
+        Route::get('/expenses-pdf', [App\Http\Controllers\Admin\ExpenseController::class, 'downloadPdf'])
+            ->name('expenses.pdf');
 
         // Reports
         Route::get('/reports', [App\Http\Controllers\Admin\ReportController::class, 'index'])->name('reports.index');
@@ -155,8 +162,8 @@ Route::middleware(['auth:shop'])->prefix('shop')->as('shop.')->group(function ()
         return view('shop.dashboard', compact('shop'));
     })->name('dashboard');
     
-    // Shop Rentals - using dedicated controller
-    Route::get('/rentals', [ShopRentalController::class, 'index'])->name('rentals');
-    Route::post('/rentals/{id}/pay/transfer', [ShopRentalPayController::class, 'transfer'])->name('rentals.pay.transfer');
-    Route::post('/rentals/{id}/pay/card', [ShopRentalPayController::class, 'card'])->name('rentals.pay.card');
+    // Shop Rentals - using unified Merchant controller
+    Route::get('/rentals', [App\Http\Controllers\Merchant\RentalController::class, 'index'])->name('rentals');
+    Route::post('/rentals/{id}/pay/transfer', [App\Http\Controllers\Merchant\RentalPayController::class, 'transfer'])->name('rentals.pay.transfer');
+    Route::post('/rentals/{id}/pay/card', [App\Http\Controllers\Merchant\RentalPayController::class, 'card'])->name('rentals.pay.card');
 });

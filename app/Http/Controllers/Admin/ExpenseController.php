@@ -6,11 +6,32 @@ use App\Http\Controllers\Controller;
 use App\Models\Expense;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class ExpenseController extends Controller
 {
-    public function index(){
-        $rows = Expense::orderByDesc('date')->paginate(20);
+    public function index(Request $request){
+        $rows = Expense::query()
+            ->when($request->filled('from_date') && $request->filled('to_date'), function($q) use ($request) {
+                $fromDate = $request->date('from_date');
+                $toDate = $request->date('to_date');
+                $q->whereBetween('date', [$fromDate, $toDate]);
+            })
+            ->when($request->filled('from_date') && !$request->filled('to_date'), function($q) use ($request) {
+                $fromDate = $request->date('from_date');
+                $q->where('date', '>=', $fromDate);
+            })
+            ->when(!$request->filled('from_date') && $request->filled('to_date'), function($q) use ($request) {
+                $toDate = $request->date('to_date');
+                $q->where('date', '<=', $toDate);
+            })
+            ->when($request->filled('name'), function($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->string('name') . '%');
+            })
+            ->orderByDesc('date')
+            ->paginate(20)
+            ->withQueryString();
+            
         return view('admin.expenses.index', compact('rows'));
     }
 
@@ -74,5 +95,57 @@ class ExpenseController extends Controller
     public function destroy(Expense $expense){
         $expense->delete();
         return back()->with('success','Deleted');
+    }
+
+    /**
+     * Download PDF of expenses with applied filters
+     */
+    public function downloadPdf(Request $request)
+    {
+        $rows = Expense::query()
+            ->when($request->filled('from_date') && $request->filled('to_date'), function($q) use ($request) {
+                $fromDate = $request->date('from_date');
+                $toDate = $request->date('to_date');
+                $q->whereBetween('date', [$fromDate, $toDate]);
+            })
+            ->when($request->filled('from_date') && !$request->filled('to_date'), function($q) use ($request) {
+                $fromDate = $request->date('from_date');
+                $q->where('date', '>=', $fromDate);
+            })
+            ->when(!$request->filled('from_date') && $request->filled('to_date'), function($q) use ($request) {
+                $toDate = $request->date('to_date');
+                $q->where('date', '<=', $toDate);
+            })
+            ->when($request->filled('name'), function($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->string('name') . '%');
+            })
+            ->orderByDesc('date')
+            ->get();
+
+        // Calculate totals
+        $totalAmount = $rows->sum('amount');
+
+        // Generate filters text for PDF header
+        $filters = [];
+        if ($request->filled('from_date')) {
+            $filters[] = 'From: ' . $request->string('from_date');
+        }
+        if ($request->filled('to_date')) {
+            $filters[] = 'To: ' . $request->string('to_date');
+        }
+        if ($request->filled('name')) {
+            $filters[] = 'Name: ' . $request->string('name');
+        }
+        $filtersText = empty($filters) ? 'All Records' : implode(', ', $filters);
+
+        $pdf = Pdf::loadView('admin.expenses.pdf', [
+            'expenses' => $rows,
+            'totalAmount' => $totalAmount,
+            'filtersText' => $filtersText
+        ])->setPaper('a4', 'landscape');
+
+        $filename = 'expenses-' . now()->format('Y-m-d-H-i-s') . '.pdf';
+        
+        return $pdf->download($filename);
     }
 }

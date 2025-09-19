@@ -32,7 +32,37 @@ class RentalController extends Controller
         $rentals = ShopRental::where('shopNumber', $shop->shopNumber)
             ->orderByDesc('month')
             ->paginate(20);
+        
+        // Calculate carry forward amounts for each rental (similar to house bills)
+        $calc = [];
+        
+        $shopRentals = ShopRental::where('shopNumber', $shop->shopNumber)
+            ->orderBy('month')
+            ->get();
+        
+        $runningOut = 0;
+        foreach ($shopRentals as $rental) {
+            $current = (float) $rental->billAmount;
+            $carry = $runningOut;
+            $total = $carry + $current;
+            
+            $calc[$rental->id] = [
+                'carry' => $carry,
+                'current' => $current,
+                'total' => $total
+            ];
+            
+            $runningOut = max(0, $total - (float) $rental->paidAmount);
+        }
+        
+        // Find latest pending bill
+        $latestPending = ShopRental::where('shopNumber', $shop->shopNumber)
+            ->where('status', '!=', 'Approved')
+            ->orderByDesc('month')
+            ->first();
+        
+        $latestPendingId = $latestPending ? $latestPending->id : null;
 
-        return view('shop.rentals', compact('rentals', 'shop'));
+        return view('shop.rentals', compact('rentals', 'shop', 'calc', 'latestPendingId'));
     }
 }

@@ -10,8 +10,10 @@
 </div>
 
 {{-- Filters --}}
-<form method="get" class="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-2 mb-3">
-  <input class="rounded border-gray-300 w-full" type="month" name="month" value="{{ request('month') }}">
+<form method="get" class="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
+  <input class="rounded border-gray-300 w-full" type="month" name="month" value="{{ request('month') }}" placeholder="Month">
+  <input class="rounded border-gray-300 w-full" type="date" name="from_date" value="{{ request('from_date') }}" placeholder="From Date">
+  <input class="rounded border-gray-300 w-full" type="date" name="to_date" value="{{ request('to_date') }}" placeholder="To Date">
   <input class="rounded border-gray-300 w-full" type="text" name="shopNumber" placeholder="Shop No" value="{{ request('shopNumber') }}">
 
   <select name="status" class="rounded border-gray-300 w-full">
@@ -29,27 +31,16 @@
     @endforeach
   </select>
 
-  <button class="px-3 py-2 bg-gray-900 text-white rounded-lg w-full sm:w-auto">Filter</button>
+  <div class="flex gap-2">
+    <button class="px-3 py-2 bg-gray-900 text-white rounded-lg flex-1">Filter</button>
+    <a href="{{ route('admin.shop-rentals.pdf', request()->query()) }}" 
+       class="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-center whitespace-nowrap">
+      📄 PDF
+    </a>
+  </div>
 </form>
 
-<div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-  <div class="text-sm text-gray-600">
-    Tip: select items and use <span class="font-medium">Bulk Approve</span>.
-  </div>
 
-  {{-- BULK APPROVE --}}
-  <form method="post" action="{{ route('admin.shop-rentals.approve', ['id' => 0]) }}" id="bulk-approve-form" class="flex items-center gap-2">
-    @csrf
-    <input type="hidden" name="bulk" value="1">
-    <select name="paymentMethod" class="rounded border-gray-300" required>
-      <option value="">Payment method…</option>
-      <option value="cash">Cash</option>
-      <option value="card">Card</option>
-      <option value="online">Online</option>
-    </select>
-    <button class="px-3 py-2 bg-green-600 text-white rounded-lg">Bulk Approve</button>
-  </form>
-</div>
 
 {{-- ===== Mobile: cards ===== --}}
 <div class="sm:hidden space-y-3">
@@ -98,8 +89,7 @@
 
       <div class="mt-3 flex items-center justify-between gap-3">
         <label class="inline-flex items-center gap-2">
-          <input form="bulk-approve-form"
-                 type="checkbox"
+          <input type="checkbox"
                  name="ids[]"
                  value="{{ $r->id }}"
                  class="rounded border-gray-300"
@@ -191,7 +181,6 @@
       <tr class="hover:bg-gray-50 align-middle">
         <td class="px-3 py-2 w-10 text-center">
           <input
-            form="bulk-approve-form"
             type="checkbox"
             name="ids[]"
             value="{{ $r->id }}"

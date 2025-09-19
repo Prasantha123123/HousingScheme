@@ -74,12 +74,12 @@ return [
         ],
 
         'houses' => [
-            'driver' => 'eloquent',
+            'driver' => 'plain_text_eloquent',
             'model' => App\Models\House::class,
         ],
 
         'shops' => [
-            'driver' => 'eloquent',
+            'driver' => 'plain_text_eloquent',
             'model' => App\Models\Shop::class,
         ],
 

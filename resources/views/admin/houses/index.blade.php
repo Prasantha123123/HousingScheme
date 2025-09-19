@@ -117,7 +117,7 @@
       </tr>
     @empty
       <tr>
-        <td class="px-3 py-6 text-gray-500" colspan="5">No houses</td>
+        <td class="px-3 py-6 text-gray-500" colspan="6">No houses</td>
       </tr>
     @endforelse
   </x-table>

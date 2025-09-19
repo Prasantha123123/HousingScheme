@@ -6,6 +6,21 @@
   <a href="{{ route('admin.expenses.create') }}" class="px-3 py-2 bg-gray-900 text-white rounded-lg">Add Expense</a>
 </div>
 
+{{-- Filters --}}
+<form method="get" class="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-3">
+  <input class="rounded border-gray-300 w-full" type="date" name="from_date" value="{{ request('from_date') }}" placeholder="From Date">
+  <input class="rounded border-gray-300 w-full" type="date" name="to_date" value="{{ request('to_date') }}" placeholder="To Date">
+  <input class="rounded border-gray-300 w-full" type="text" name="name" placeholder="Expense Name" value="{{ request('name') }}">
+  
+  <div class="flex gap-2">
+    <button class="px-3 py-2 bg-gray-900 text-white rounded-lg flex-1">Filter</button>
+    <a href="{{ route('admin.expenses.pdf', request()->query()) }}" 
+       class="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-center whitespace-nowrap">
+      📄 PDF
+    </a>
+  </div>
+</form>
+
 @php
   $items = $rows ?? collect();
   $total = collect($items)->sum('amount');

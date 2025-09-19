@@ -52,9 +52,8 @@ class ShopController extends Controller
             'shop_password.required_without' => 'Set a shop password when no merchant is selected.',
         ]);
 
-        if (!empty($data['shop_password'])) {
-            $data['shop_password'] = Hash::make($data['shop_password']);
-        }
+        // Handle password creation - store as plain text for admin visibility
+        // Note: shop_password is stored as plain text for admin reference
 
         Shop::create($data);
 
@@ -86,10 +85,11 @@ class ShopController extends Controller
             'shop_password'=> ['nullable','string','min:6'], // optional on edit
         ]);
 
-        if (!empty($data['shop_password'])) {
-            $data['shop_password'] = Hash::make($data['shop_password']);
-        } else {
-            unset($data['shop_password']); // don't overwrite
+        // Handle password update - store as plain text for admin visibility
+        // Note: shop_password is stored as plain text for admin reference
+        // If password field is empty, don't update it
+        if (empty($data['shop_password'])) {
+            unset($data['shop_password']); // don't overwrite with null
         }
 
         $shop->update($data);

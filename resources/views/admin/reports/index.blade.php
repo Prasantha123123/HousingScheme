@@ -30,48 +30,11 @@
   <x-stat title="Net (Cash)" :value="number_format(($income['total'] ?? 0)-($expense['total'] ?? 0),2)"/>
 </div>
 
-{{-- Accrual & A/R KPIs --}}
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+{{-- Accrual KPIs --}}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
   <x-stat title="Billed Rentals (Accrual)" :value="number_format(($billed['total'] ?? 0),2)"/>
-  <x-stat title="Opening A/R" :value="number_format(($ar['opening'] ?? 0),2)"/>
+  <x-stat title="Outstanding Amounts" :value="number_format(($ar['closing'] ?? 0),2)"/>
   <x-stat title="Collected (Rentals)" :value="number_format(($ar['collected_rentals'] ?? 0),2)"/>
-  <x-stat title="Closing A/R" :value="number_format(($ar['closing'] ?? 0),2)"/>
-</div>
-
-{{-- A/R Movement Details --}}
-<div class="bg-white rounded-lg p-4 mb-4">
-  <h3 class="font-semibold mb-3">A/R Movement Analysis</h3>
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-    <div class="text-center">
-      <div class="text-2xl font-bold text-blue-600">{{ number_format($ar['increase'] ?? 0, 2) }}</div>
-      <div class="text-sm text-gray-600">A/R Increase (Billed)</div>
-    </div>
-    <div class="text-center">
-      <div class="text-2xl font-bold text-green-600">{{ number_format($ar['decrease'] ?? 0, 2) }}</div>
-      <div class="text-sm text-gray-600">A/R Decrease (Collections)</div>
-    </div>
-    <div class="text-center">
-      <div class="text-2xl font-bold {{ ($ar['net_movement'] ?? 0) >= 0 ? 'text-red-600' : 'text-green-600' }}">
-        {{ number_format($ar['net_movement'] ?? 0, 2) }}
-      </div>
-      <div class="text-sm text-gray-600">Net A/R Movement</div>
-    </div>
-  </div>
-  
-  {{-- Validation check --}}
-  @if(isset($ar['closing_alternative']))
-    @php
-      $diff = abs(($ar['closing'] ?? 0) - ($ar['closing_alternative'] ?? 0));
-    @endphp
-    @if($diff > 0.01)
-      <div class="mt-3 p-2 bg-yellow-100 border border-yellow-400 rounded text-sm">
-        <strong>Validation Note:</strong> 
-        Direct calculation: {{ number_format($ar['closing'] ?? 0, 2) }} | 
-        Formula calculation: {{ number_format($ar['closing_alternative'] ?? 0, 2) }} | 
-        Difference: {{ number_format($diff, 2) }}
-      </div>
-    @endif
-  @endif
 </div>
 
 {{-- Breakdown cards: 1-col on phones, 3-col on md+ --}}

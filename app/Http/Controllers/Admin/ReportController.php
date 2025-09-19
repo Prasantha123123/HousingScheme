@@ -58,17 +58,9 @@ class ReportController extends Controller
         $shopBilled   = (float) ShopRental::whereBetween('month', [$fromMonth, $toMonth])->sum('billAmount');
         $billedTotal  = $houseBilled + $shopBilled;
 
-        // ===== A/R Opening & Closing (rentals only) =====
-        // Opening A/R = outstanding amounts at the start of the period
+        // ===== A/R Closing Balance (rentals only) =====
         // Closing A/R = outstanding amounts at the end of the period
         
-        // Opening A/R: Sum of unpaid amounts from all months before the period start
-        $houseOpeningAR = HouseRental::where('month', '<', $fromMonth)->get()
-            ->sum(fn($r) => max(0, (float)$r->billAmount - (float)$r->paidAmount));
-        $shopOpeningAR  = ShopRental::where('month', '<', $fromMonth)->get()
-            ->sum(fn($r) => max(0, (float)$r->billAmount - (float)$r->paidAmount));
-        $openingAR = (float)$houseOpeningAR + (float)$shopOpeningAR;
-
         // Closing A/R: Sum of unpaid amounts from all months up to and including the period end
         $houseClosingAR = HouseRental::where('month', '<=', $toMonth)->get()
             ->sum(fn($r) => max(0, (float)$r->billAmount - (float)$r->paidAmount));
@@ -76,15 +68,8 @@ class ReportController extends Controller
             ->sum(fn($r) => max(0, (float)$r->billAmount - (float)$r->paidAmount));
         $closingAR = (float)$houseClosingAR + (float)$shopClosingAR;
 
-        // Validation: Alternative calculation using the accounting equation
         // Only rentals reduce AR (exclude inventory)
         $collectedRentalsOnly = $houseCollected + $shopCollected;
-        $closingAR_Alternative = $openingAR + $billedTotal - $collectedRentalsOnly;
-
-        // A/R Movement Summary for the period
-        $arIncrease = $billedTotal; // New bills increase A/R
-        $arDecrease = $collectedRentalsOnly; // Collections decrease A/R
-        $arNetMovement = $arIncrease - $arDecrease; // Net change in A/R
 
         // ===== STATUS COUNTS in the period (by billed month) =====
         $paidStatuses        = ['Approved', 'ExtraPayment'];
@@ -118,20 +103,15 @@ class ReportController extends Controller
                 'total'   => $expenseTotal,
             ],
 
-            // Accrual + AR
+            // Accrual info
             'billed' => [
                 'house' => $houseBilled,
                 'shop'  => $shopBilled,
                 'total' => $billedTotal,
             ],
             'ar' => [
-                'opening'              => $openingAR,
-                'closing'              => $closingAR,
-                'closing_alternative'  => $closingAR_Alternative,
-                'collected_rentals'    => $collectedRentalsOnly,
-                'increase'             => $arIncrease,
-                'decrease'             => $arDecrease,
-                'net_movement'         => $arNetMovement,
+                'closing'           => $closingAR,
+                'collected_rentals' => $collectedRentalsOnly,
             ],
 
             // Counts

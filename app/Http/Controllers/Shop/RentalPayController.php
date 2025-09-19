@@ -81,24 +81,38 @@ class RentalPayController extends Controller
             ->first();
 
         if (!$latestOpen || $latestOpen->id !== $latest->id) {
-            return back()->withErrors(['error' => 'You can only pay the latest outstanding rental.']);
+            return back()->withErrors(['amount' => 'You can only pay the latest outstanding rental.']);
+        }
+
+        // Calculate carry from previous unpaid months
+        $carry = ShopRental::where('shopNumber', $latest->shopNumber)
+            ->where('month', '<', $latest->month)
+            ->get()
+            ->sum(fn (ShopRental $r) => max(0, (float)$r->billAmount - (float)$r->paidAmount));
+
+        $totalDue = (float)$latest->billAmount + $carry;
+        $alreadyPaid = (float)$latest->paidAmount;
+        $outstanding = max(0, $totalDue - $alreadyPaid);
+        $toApply = min($amount, $outstanding); // prevent accidental overpay
+
+        if ($toApply <= 0) {
+            return back()->withErrors(['amount' => 'Nothing outstanding to pay.']);
         }
 
         try {
-            DB::transaction(function () use ($latest, $method, $receiptPath, $amount) {
-                $currentPaidAmount = (float)$latest->paidAmount;
-                $newPaidAmount = $currentPaidAmount + $amount;
-                
-                $latest->update([
-                    'paidAmount'      => $newPaidAmount,
-                    'paymentMethod'   => $method,
-                    'recipt'          => $receiptPath,
-                    'status'          => 'InProgress',
-                    'timestamp'       => now(),
-                ]);
+            DB::transaction(function () use ($latest, $method, $receiptPath, $toApply) {
+                $latest->paymentMethod = $method;
+                if ($receiptPath) {
+                    $latest->recipt = $receiptPath;
+                }
+                // Add this payment to whatever was already paid (supports multiple part-payments)
+                $latest->paidAmount = (float)$latest->paidAmount + $toApply;
+                $latest->status = 'Pending';   // waiting for admin approval
+                $latest->customer_paid_at = now();
+                $latest->save();
             });
 
-            return back()->with('success', "Payment of $amount recorded successfully. Awaiting admin approval.");
+            return back()->with('success', 'Payment recorded. Admin will approve it shortly.');
         } catch (\Exception $e) {
             Log::error('Payment failed for shop ' . $latest->shopNumber . ': ' . $e->getMessage());
             return back()->withErrors(['error' => 'Payment failed: ' . $e->getMessage()]);

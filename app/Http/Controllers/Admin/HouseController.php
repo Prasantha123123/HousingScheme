@@ -76,9 +76,7 @@ class HouseController extends Controller
             'house_password.required_without' => 'Set a house password when no owner is selected.',
         ]);
 
-        if (!empty($data['house_password'])) {
-            $data['house_password'] = Hash::make($data['house_password']);
-        }
+        // Note: house_password is stored as plain text for admin visibility
 
         House::create($data);
 
@@ -117,9 +115,9 @@ class HouseController extends Controller
             'HouseOwneId.unique' => 'This owner already has a house.',
         ]);
 
-        if (!empty($data['house_password'])) {
-            $data['house_password'] = Hash::make($data['house_password']);
-        } else {
+        // Handle password update - store as plain text for admin visibility
+        // Note: house_password is stored as plain text for admin reference
+        if (empty($data['house_password'])) {
             unset($data['house_password']); // don't overwrite with null
         }
 

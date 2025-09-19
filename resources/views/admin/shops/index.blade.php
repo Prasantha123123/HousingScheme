@@ -53,7 +53,7 @@
       </td>
     </tr>
   @empty
-    <tr><td class="px-3 py-6 text-gray-500" colspan="5">No shops</td></tr>
+    <tr><td class="px-3 py-6 text-gray-500" colspan="6">No shops</td></tr>
   @endforelse
 </x-table>
 

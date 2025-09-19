@@ -1,17 +1,17 @@
 <?php
-// App/Models/House.php
+
 namespace App\Models;
 
-use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Contracts\Auth\Authenticatable;
 
 /**
- * House model with authentication capabilities.
+ * House model for admin management and authentication.
  * 
- * Authenticates directly against the houses table when HouseOwneId is NULL.
+ * Stores house information with plain text passwords for admin visibility.
  * Primary key is houseNo (string, non-incrementing).
- * Password field is house_password (bcrypt hash).
  */
-class House extends Authenticatable
+class House extends Model implements Authenticatable
 {
     protected $table = 'houses';
     protected $primaryKey = 'houseNo';
@@ -20,20 +20,6 @@ class House extends Authenticatable
     public $timestamps = false;
 
     protected $fillable = ['houseNo', 'HouseOwneId', 'house_password'];
-
-    // Hide password from serialization
-    protected $hidden = ['house_password'];
-
-    /**
-     * Get the password for authentication.
-     * Required by Authenticatable interface.
-     *
-     * @return string
-     */
-    public function getAuthPassword()
-    {
-        return $this->house_password;
-    }
 
     /**
      * Get the column name for the primary key.
@@ -54,6 +40,51 @@ class House extends Authenticatable
     public function getAuthIdentifier()
     {
         return $this->getAttribute($this->getAuthIdentifierName());
+    }
+
+    /**
+     * Get the password for authentication.
+     * Since we store plain text, return it as-is.
+     *
+     * @return string
+     */
+    public function getAuthPassword()
+    {
+        return $this->house_password;
+    }
+
+    /**
+     * Get the password column name.
+     *
+     * @return string
+     */
+    public function getAuthPasswordName()
+    {
+        return 'house_password';
+    }
+
+    /**
+     * Get the remember token.
+     */
+    public function getRememberToken()
+    {
+        return null; // Not implemented for houses
+    }
+
+    /**
+     * Set the remember token.
+     */
+    public function setRememberToken($value)
+    {
+        // Not implemented for houses
+    }
+
+    /**
+     * Get the remember token name.
+     */
+    public function getRememberTokenName()
+    {
+        return null; // Not implemented
     }
 
     /**

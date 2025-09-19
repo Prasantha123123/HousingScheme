@@ -2,19 +2,19 @@
 
 namespace App\Models;
 
-use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Contracts\Auth\Authenticatable;
 
 /**
- * Shop model with authentication capabilities.
+ * Shop model for admin management and authentication.
  * 
- * Authenticates directly against the Shops table when MerchantId is NULL.
+ * Stores shop information with plain text passwords for admin visibility.
  * Primary key is shopNumber (string, non-incrementing).
- * Password field is shop_password (bcrypt hash).
  */
-class Shop extends Authenticatable
+class Shop extends Model implements Authenticatable
 {
-    protected $table = 'Shops';                 // from your migration
+    protected $table = 'Shops';
     protected $primaryKey = 'shopNumber';
     public $incrementing = false;
     protected $keyType = 'string';
@@ -23,20 +23,6 @@ class Shop extends Authenticatable
     protected $fillable = [
         'shopNumber', 'MerchantId', 'leaseEnd', 'rentalAmount', 'shop_password','timestamp'
     ];
-
-    // Hide password from serialization
-    protected $hidden = ['shop_password'];
-
-    /**
-     * Get the password for authentication.
-     * Required by Authenticatable interface.
-     *
-     * @return string
-     */
-    public function getAuthPassword()
-    {
-        return $this->shop_password;
-    }
 
     /**
      * Get the column name for the primary key.
@@ -57,6 +43,51 @@ class Shop extends Authenticatable
     public function getAuthIdentifier()
     {
         return $this->getAttribute($this->getAuthIdentifierName());
+    }
+
+    /**
+     * Get the password for authentication.
+     * Since we store plain text, return it as-is.
+     *
+     * @return string
+     */
+    public function getAuthPassword()
+    {
+        return $this->shop_password;
+    }
+
+    /**
+     * Get the password column name.
+     *
+     * @return string
+     */
+    public function getAuthPasswordName()
+    {
+        return 'shop_password';
+    }
+
+    /**
+     * Get the remember token.
+     */
+    public function getRememberToken()
+    {
+        return null; // Not implemented for shops
+    }
+
+    /**
+     * Set the remember token.
+     */
+    public function setRememberToken($value)
+    {
+        // Not implemented for shops
+    }
+
+    /**
+     * Get the remember token name.
+     */
+    public function getRememberTokenName()
+    {
+        return null; // Not implemented
     }
 
     /**

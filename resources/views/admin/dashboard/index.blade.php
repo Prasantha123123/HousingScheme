@@ -21,39 +21,7 @@
   <x-stat title="Closing A/R" :value="number_format($closingAR ?? 0, 2)"/>
 </div>
 
-{{-- A/R Movement Summary for current month --}}
-@if(isset($arNetMovement))
-<div class="bg-white rounded-lg p-4 mb-4">
-  <h3 class="font-semibold mb-3">A/R Movement ({{ $month }})</h3>
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-    <div>
-      <div class="text-xl font-bold text-blue-600">{{ number_format($arIncrease ?? 0, 2) }}</div>
-      <div class="text-sm text-gray-600">A/R Increase</div>
-    </div>
-    <div>
-      <div class="text-xl font-bold text-green-600">{{ number_format($arDecrease ?? 0, 2) }}</div>
-      <div class="text-sm text-gray-600">A/R Decrease</div>
-    </div>
-    <div>
-      <div class="text-xl font-bold {{ ($arNetMovement ?? 0) >= 0 ? 'text-red-600' : 'text-green-600' }}">
-        {{ number_format($arNetMovement ?? 0, 2) }}
-      </div>
-      <div class="text-sm text-gray-600">Net Movement</div>
-    </div>
-  </div>
-  
-  @if(isset($closingAR_Alternative))
-    @php
-      $diff = abs(($closingAR ?? 0) - ($closingAR_Alternative ?? 0));
-    @endphp
-    @if($diff > 0.01)
-      <div class="mt-3 p-2 bg-yellow-100 border border-yellow-400 rounded text-xs">
-        <strong>Validation:</strong> Direct: {{ number_format($closingAR ?? 0, 2) }} | Formula: {{ number_format($closingAR_Alternative ?? 0, 2) }}
-      </div>
-    @endif
-  @endif
-</div>
-@endif
+
 
 {{-- Cash P&L style (Collections vs Expenses) --}}
 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">

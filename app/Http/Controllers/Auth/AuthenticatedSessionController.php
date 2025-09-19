@@ -137,16 +137,24 @@ class AuthenticatedSessionController extends Controller
         ]);
         
         if ($house && $house->canLoginDirectly()) {
-            // Use the guard's attempt method for proper authentication
-            $success = Auth::guard('house')->attempt([
+            // Normalize credentials for Laravel's authentication system
+            $credentials = [
                 $house->getAuthIdentifierName() => $identifier,
-                'password' => $password
-            ], $request->boolean('remember'));
+                'password' => $password  // Always use 'password' key for Laravel compatibility
+            ];
+            
+            \Log::info('House authentication attempt', [
+                'identifier_field' => $house->getAuthIdentifierName(),
+                'identifier_value' => $identifier,
+                'house_password_field' => $house->getAuthPasswordName(),
+                'stored_password_preview' => substr($house->getAuthPassword(), 0, 10) . '...'
+            ]);
+            
+            $success = Auth::guard('house')->attempt($credentials, $request->boolean('remember'));
             
             \Log::info('House guard attempt result', [
                 'identifier' => $identifier,
-                'success' => $success ? 'yes' : 'no',
-                'auth_name' => $house->getAuthIdentifierName()
+                'success' => $success ? 'yes' : 'no'
             ]);
             
             if ($success) {
@@ -167,11 +175,20 @@ class AuthenticatedSessionController extends Controller
         $shop = Shop::where('shopNumber', $identifier)->first();
         
         if ($shop && $shop->canLoginDirectly()) {
-            // Use the guard's attempt method for proper authentication
-            $success = Auth::guard('shop')->attempt([
+            // Normalize credentials for Laravel's authentication system
+            $credentials = [
                 $shop->getAuthIdentifierName() => $identifier,
-                'password' => $password
-            ], $request->boolean('remember'));
+                'password' => $password  // Always use 'password' key for Laravel compatibility
+            ];
+            
+            \Log::info('Shop authentication attempt', [
+                'identifier_field' => $shop->getAuthIdentifierName(),
+                'identifier_value' => $identifier,
+                'shop_password_field' => $shop->getAuthPasswordName(),
+                'stored_password_preview' => substr($shop->getAuthPassword(), 0, 10) . '...'
+            ]);
+            
+            $success = Auth::guard('shop')->attempt($credentials, $request->boolean('remember'));
             
             if ($success) {
                 $request->session()->regenerate();

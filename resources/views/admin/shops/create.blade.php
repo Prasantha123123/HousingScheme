@@ -43,11 +43,12 @@
       <span id="passwordHint" class="text-xs text-gray-500">(required if no merchant selected)</span>
     </span>
     <input
-      type="password"
+      type="text"
       name="shop_password"
       id="shopPassword"
       class="mt-1 w-full rounded border-gray-300"
       placeholder="Enter a password if merchant is empty"
+      value="{{ old('shop_password') }}"
       @if(!old('MerchantId')) {{-- UX hint only; server-side validates anyway --}}
         {{-- no required here; enforced server-side with required_without --}}
       @endif

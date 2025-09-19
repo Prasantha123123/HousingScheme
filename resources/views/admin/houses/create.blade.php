@@ -30,8 +30,8 @@
 
     <label class="block">
       <span class="text-sm">House Password</span>
-      <input name="house_password" type="password" class="mt-1 w-full rounded border-gray-300"
-             placeholder="Required if no owner selected">
+      <input name="house_password" type="text" class="mt-1 w-full rounded border-gray-300"
+             placeholder="Required if no owner selected" value="{{ old('house_password') }}">
       @error('house_password') <p class="text-red-600 text-sm mt-1">{{ $message }}</p> @enderror
     </label>
   </div>
