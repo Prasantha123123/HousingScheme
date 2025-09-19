@@ -112,7 +112,6 @@ Route::middleware(['auth'])->group(function () {
         // Reports
         Route::get('/reports', [App\Http\Controllers\Admin\ReportController::class, 'index'])->name('reports.index');
         Route::get('/reports/export/pdf', [App\Http\Controllers\Admin\ReportExportController::class, 'pdf'])->name('reports.export.pdf');
-        Route::get('/reports/export/csv', [App\Http\Controllers\Admin\ReportExportController::class, 'csv'])->name('reports.export.csv');
 
         // Settings
         Route::get('/settings', [App\Http\Controllers\Admin\SettingController::class, 'edit'])->name('settings.edit');

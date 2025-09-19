@@ -18,8 +18,6 @@
     <button class="px-3 py-2 bg-gray-900 text-white rounded-lg w-full sm:w-auto">Apply</button>
     <a class="px-3 py-2 bg-red-600 text-white rounded-lg w-full sm:w-auto"
        href="{{ route('admin.reports.export.pdf', request()->query()) }}">Export PDF</a>
-    <a class="px-3 py-2 bg-blue-600 text-white rounded-lg w-full sm:w-auto"
-       href="{{ route('admin.reports.export.csv', request()->query()) }}">Export CSV</a>
   </div>
 </form>
 
