@@ -90,24 +90,51 @@ class RentalPayController extends Controller
         $totalDue = (float)$latest->billAmount + $carry;
         $alreadyPaid = (float)$latest->paidAmount;
         $outstanding = max(0, $totalDue - $alreadyPaid);
-        $toApply = min($amount, $outstanding); // prevent accidental overpay
 
-        if ($toApply <= 0) {
+        if ($amount <= 0) {
+            return back()->withErrors(['amount' => 'Payment amount must be greater than zero.']);
+        }
+
+        if ($outstanding <= 0) {
             return back()->withErrors(['amount' => 'Nothing outstanding to pay.']);
         }
 
-        DB::transaction(function () use ($latest, $method, $receiptPath, $toApply) {
+        // Determine payment status based on amount
+        $newPaidAmount = $alreadyPaid + $amount;
+        $newStatus = 'Pending'; // Default to pending until admin approval
+        
+        if ($newPaidAmount >= $totalDue) {
+            // Full payment or overpayment
+            if ($newPaidAmount > $totalDue) {
+                // Overpayment - limit to total due and set as ExtraPayment status
+                $newPaidAmount = $alreadyPaid + $outstanding; // Only pay what's due
+                $newStatus = 'ExtraPayment'; // Admin will handle excess
+            } else {
+                // Exact payment
+                $newStatus = 'Pending';
+            }
+        } else {
+            // Partial payment
+            $newStatus = 'PartPayment';
+        }
+
+        DB::transaction(function () use ($latest, $method, $receiptPath, $newPaidAmount, $newStatus, $alreadyPaid) {
             $latest->paymentMethod = $method;
             if ($receiptPath) {
                 $latest->recipt = $receiptPath;
             }
-            // Add this payment to whatever was already paid (supports multiple part-payments)
-            $latest->paidAmount = (float)$latest->paidAmount + $toApply;
-            $latest->status = 'Pending';   // waiting for admin approval
+            $latest->paidAmount = $newPaidAmount;
+            $latest->status = $newStatus;
             $latest->customer_paid_at = now();
             $latest->save();
         });
 
-        return back()->with('success', 'Payment recorded. Admin will approve it shortly.');
+        $message = match($newStatus) {
+            'PartPayment' => 'Partial payment recorded. You can make additional payments until fully paid.',
+            'ExtraPayment' => 'Full payment recorded with overpayment. Admin will handle the excess amount.',
+            default => 'Payment recorded. Admin will approve it shortly.'
+        };
+
+        return back()->with('success', $message);
     }
 }

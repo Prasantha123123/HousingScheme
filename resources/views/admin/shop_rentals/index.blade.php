@@ -90,6 +90,9 @@
 {{-- ===== Mobile: cards ===== --}}
 <div class="sm:hidden space-y-3">
   @forelse($rows ?? [] as $r)
+    @php
+      $balance = max(0, (float)$r->billAmount - (float)$r->paidAmount);
+    @endphp
     <div class="rounded-lg border bg-white p-3 shadow-sm">
       <div class="flex items-start justify-between gap-2">
         <div>
@@ -110,17 +113,21 @@
       <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
         <div>
           <div class="text-gray-500">Bill</div>
-          <div class="font-medium">{{ number_format($r->billAmount,2) }}</div>
+          <div class="font-medium">{{ number_format($r->billAmount,2,'.', ',') }}</div>
         </div>
         <div class="text-right">
           <div class="text-gray-500">Paid</div>
-          <div class="font-medium">{{ number_format($r->paidAmount,2) }}</div>
+          <div class="font-medium">{{ number_format($r->paidAmount,2,'.', ',') }}</div>
         </div>
         <div>
+          <div class="text-gray-500">Balance</div>
+          <div class="font-medium {{ $balance > 0 ? 'text-red-600' : 'text-green-600' }}">{{ number_format($balance,2,'.', ',') }}</div>
+        </div>
+        <div class="text-right">
           <div class="text-gray-500">Method</div>
           <div class="uppercase">{{ $r->paymentMethod ?: '-' }}</div>
         </div>
-        <div class="text-right">
+        <div class="col-span-2 text-center">
           <div class="text-gray-500">Status</div>
           <x-badge :status="$r->status"/>
         </div>
@@ -136,7 +143,7 @@
         @if($r->status === 'Approved')
           <button class="px-2 py-1 text-green-700 opacity-40 cursor-not-allowed" disabled>Approve</button>
         @else
-          @if(empty($r->paymentMethod))
+          @if(empty($r->paymentMethod) || $r->status === 'PartPayment')
             <button type="button" class="px-2 py-1 text-green-700" x-data @click="$dispatch('open-modal','approve-{{ $r->id }}')">
               Approve
             </button>
@@ -161,16 +168,22 @@
       </div>
     </div>
 
-    @if($r->status !== 'Approved' && empty($r->paymentMethod))
+    @if($r->status !== 'Approved' && (empty($r->paymentMethod) || $r->status === 'PartPayment'))
       <x-modal :name="'approve-'.$r->id" :title="'Approve Rental #'.$r->id">
         <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="space-y-3">
           @csrf
-          <input type="hidden" name="paymentMethod" value="cash">
-          <p class="text-sm text-gray-600">Recording a <span class="font-medium">cash</span> payment.</p>
+          <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod ?: 'cash' }}">
+          <p class="text-sm text-gray-600">
+            Recording a <span class="font-medium">{{ $r->paymentMethod ?: 'cash' }}</span> payment.
+            @if($r->status === 'PartPayment')
+              <br><span class="text-orange-600">Additional payment for partial rental.</span>
+            @endif
+          </p>
           <label class="block">
             <span class="text-sm">Paid Amount</span>
             <input type="number" name="paidAmount" step="0.01" min="0"
-                   value="{{ old('paidAmount', $r->paidAmount > 0 ? $r->paidAmount : $r->billAmount) }}"
+                   value="{{ old('paidAmount', '') }}"
+                   placeholder="Enter additional amount"
                    class="mt-1 w-full rounded border-gray-300" required>
           </label>
           <div class="text-right">
@@ -192,6 +205,7 @@
       <th class="px-3 py-2 text-left  w-28">Month</th>
       <th class="px-3 py-2 text-right w-28">Bill</th>
       <th class="px-3 py-2 text-right w-28">Paid</th>
+      <th class="px-3 py-2 text-right w-28">Balance</th>
       <th class="px-3 py-2 text-center w-28 hidden lg:table-cell">Method</th>
       <th class="px-3 py-2 text-center w-28 hidden lg:table-cell">Receipt</th>
       <th class="px-3 py-2 text-center w-28">Status</th>
@@ -199,11 +213,15 @@
     </x-slot:head>
 
     @forelse($rows ?? [] as $r)
+      @php
+        $balance = max(0, (float)$r->billAmount - (float)$r->paidAmount);
+      @endphp
       <tr class="hover:bg-gray-50 align-middle">
         <td class="px-3 py-2 w-32">{{ $r->shopNumber }}</td>
         <td class="px-3 py-2 w-28">{{ $r->month }}</td>
-        <td class="px-3 py-2 text-right w-28">{{ number_format($r->billAmount,2) }}</td>
-        <td class="px-3 py-2 text-right w-28">{{ number_format($r->paidAmount,2) }}</td>
+        <td class="px-3 py-2 text-right w-28">{{ number_format($r->billAmount,2,'.', ',') }}</td>
+        <td class="px-3 py-2 text-right w-28">{{ number_format($r->paidAmount,2,'.', ',') }}</td>
+        <td class="px-3 py-2 text-right w-28 {{ $balance > 0 ? 'text-red-600 font-medium' : 'text-green-600' }}">{{ number_format($balance,2,'.', ',') }}</td>
         <td class="px-3 py-2 text-center w-28 hidden lg:table-cell uppercase">
           {{ $r->paymentMethod ?: '-' }}
         </td>
@@ -221,7 +239,7 @@
           @if($r->status === 'Approved')
             <button class="text-green-700 opacity-50 cursor-not-allowed" disabled>Approve</button>
           @else
-            @if(empty($r->paymentMethod))
+            @if(empty($r->paymentMethod) || $r->status === 'PartPayment')
               <button type="button" class="text-green-700" x-data @click="$dispatch('open-modal','approve-{{ $r->id }}')">
                 Approve
               </button>
@@ -247,16 +265,22 @@
         </td>
       </tr>
 
-      @if($r->status !== 'Approved' && empty($r->paymentMethod))
+      @if($r->status !== 'Approved' && (empty($r->paymentMethod) || $r->status === 'PartPayment'))
         <x-modal :name="'approve-'.$r->id" :title="'Approve Rental #'.$r->id">
           <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="space-y-3">
             @csrf
-            <input type="hidden" name="paymentMethod" value="cash">
-            <p class="text-sm text-gray-600">Recording a <span class="font-medium">cash</span> payment.</p>
+            <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod ?: 'cash' }}">
+            <p class="text-sm text-gray-600">
+              Recording a <span class="font-medium">{{ $r->paymentMethod ?: 'cash' }}</span> payment.
+              @if($r->status === 'PartPayment')
+                <br><span class="text-orange-600">Additional payment for partial rental.</span>
+              @endif
+            </p>
             <label class="block">
               <span class="text-sm">Paid Amount</span>
               <input type="number" name="paidAmount" step="0.01" min="0"
-                     value="{{ old('paidAmount', $r->paidAmount > 0 ? $r->paidAmount : $r->billAmount) }}"
+                     value="{{ old('paidAmount', '') }}"
+                     placeholder="Enter additional amount"
                      class="mt-1 w-full rounded border-gray-300" required>
             </label>
             <div class="text-right">
@@ -266,7 +290,7 @@
         </x-modal>
       @endif
     @empty
-      <tr><td class="px-3 py-6 text-gray-500 text-center" colspan="8">No data</td></tr>
+      <tr><td class="px-3 py-6 text-gray-500 text-center" colspan="9">No data</td></tr>
     @endforelse
   </x-table>
 </div>

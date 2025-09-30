@@ -9,8 +9,11 @@
     $carry = $calc[$r->id]['carry'] ?? 0;
     $current = $calc[$r->id]['current'] ?? $r->billAmount;
     $total = $calc[$r->id]['total'] ?? ($carry + $current);
-    $canPay = isset($latestPending[$r->shopNumber]) && $latestPending[$r->shopNumber] === $r->id && $r->status !== 'Approved';
     $outstanding = max(0, $total - (float)$r->paidAmount);
+    $canPay = isset($latestPending[$r->shopNumber]) && $latestPending[$r->shopNumber] === $r->id && $r->status !== 'Approved';
+    
+    // Allow payment for PartPayment status (partial payments enabled)
+    $allowPayment = $canPay && ($r->status !== 'Pending' || $r->status === 'PartPayment');
   @endphp
   
   <div class="bg-white rounded-lg p-4 mb-3 border">
@@ -50,7 +53,7 @@
       </div>
     @endif
 
-    @if($canPay && $outstanding > 0)
+    @if($allowPayment && $outstanding > 0)
       {{-- Enhanced payment form with carry forward support --}}
       <form
         x-data="{ method: 'card', maxAmount: {{ $outstanding }} }"
@@ -61,6 +64,25 @@
         class="mt-3"
       >
         @csrf
+
+        @php
+          $isPaymentPending = in_array($r->status, ['Pending', 'ExtraPayment']) && $r->paidAmount > 0;
+        @endphp
+
+        @if($isPaymentPending)
+          <div class="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div class="flex items-center">
+              <div class="text-yellow-600">⏳</div>
+              <div class="ml-2 text-sm text-yellow-800">
+                @if($r->status === 'Pending')
+                  Payment submitted and awaiting admin approval
+                @elseif($r->status === 'ExtraPayment')
+                  Overpayment detected - awaiting admin review
+                @endif
+              </div>
+            </div>
+          </div>
+        @endif
 
         {{-- Enhanced grid: Method (2) | Amount (1) | Bank Ref (2) | Receipt (1) | Button (1) --}}
         <div class="max-w-6xl grid grid-cols-1 sm:grid-cols-7 gap-3 items-end" x-cloak>
@@ -116,9 +138,12 @@
 
           {{-- Submit button --}}
           <div class="sm:col-span-1 flex sm:justify-end">
+            @php
+              $isDisabled = in_array($r->status, ['Pending', 'ExtraPayment']) && $r->paidAmount > 0;
+            @endphp
             <button
-              class="h-10 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg w-full sm:w-auto"
-              :disabled="false"
+              class="h-10 px-4 rounded-lg w-full sm:w-auto {{ $isDisabled ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700' }} text-white"
+              @if($isDisabled) disabled @endif
             >
               <span x-text="method === 'card' ? 'Pay Now' : 'Submit Transfer'"></span>
             </button>

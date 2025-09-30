@@ -33,7 +33,7 @@
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
   <x-stat title="Expenses (month)" :value="number_format($expenses ?? 0, 2)"/>
   <x-stat title="Cash Net (Collections - Expenses)" :value="number_format($cashNet ?? 0, 2)"/>
-  <x-stat title="Entities" :value="number_format(($totalHouses ?? 0) + ($totalShops ?? 0))" subtitle="{{ number_format($totalHouses ?? 0) }} Houses · {{ number_format($totalShops ?? 0) }} Shops"/>
+  <x-stat title="Entities" :value="number_format(($totalHouses ?? 0) + ($totalShops ?? 0))" subtitle="{{ number_format($totalHouses ?? 0) }} Houses → {{ number_format($totalShops ?? 0) }} Shops"/>
 </div>
 
 {{-- Generation counts --}}
@@ -55,15 +55,15 @@
         <div class="text-xl font-semibold">{{ number_format($houseBilled ?? 0, 2) }}</div>
       </div>
       <div class="rounded border p-3">
-        <div class="text-gray-600">Pending (count · outstanding)</div>
+        <div class="text-gray-600">Pending (count → outstanding)</div>
         <div class="text-xl font-semibold">
-          {{ number_format($housePendingCount ?? 0) }} · {{ number_format($housePendingTotal ?? 0, 2) }}
+          {{ number_format($housePendingCount ?? 0) }} → {{ number_format($housePendingTotal ?? 0, 2) }}
         </div>
       </div>
       <div class="rounded border p-3">
-        <div class="text-gray-600">Completed (count · collected)</div>
+        <div class="text-gray-600">Completed (count → collected)</div>
         <div class="text-xl font-semibold">
-          {{ number_format($houseCompletedCount ?? 0) }} · {{ number_format($houseCompletedTotal ?? 0, 2) }}
+          {{ number_format($houseCompletedCount ?? 0) }} → {{ number_format($houseCompletedTotal ?? 0, 2) }}
         </div>
       </div>
     </div>
@@ -78,15 +78,15 @@
         <div class="text-xl font-semibold">{{ number_format($shopBilled ?? 0, 2) }}</div>
       </div>
       <div class="rounded border p-3">
-        <div class="text-gray-600">Pending (count · outstanding)</div>
+        <div class="text-gray-600">Pending (count → outstanding)</div>
         <div class="text-xl font-semibold">
-          {{ number_format($shopPendingCount ?? 0) }} · {{ number_format($shopPendingTotal ?? 0, 2) }}
+          {{ number_format($shopPendingCount ?? 0) }} → {{ number_format($shopPendingTotal ?? 0, 2) }}
         </div>
       </div>
       <div class="rounded border p-3">
-        <div class="text-gray-600">Completed (count · collected)</div>
+        <div class="text-gray-600">Completed (count → collected)</div>
         <div class="text-xl font-semibold">
-          {{ number_format($shopCompletedCount ?? 0) }} · {{ number_format($shopCompletedTotal ?? 0, 2) }}
+          {{ number_format($shopCompletedCount ?? 0) }} → {{ number_format($shopCompletedTotal ?? 0, 2) }}
         </div>
       </div>
     </div>
@@ -136,7 +136,7 @@
         <tr class="hover:bg-gray-50">
           <td class="px-3 py-2">{{ $p['type'] }}</td>
           <td class="px-3 py-2">
-            {{ $p['type']=='House' ? $p['houseNo'] : $p['shopNumber'] }} · {{ $p['month'] }}
+            {{ $p['type']=='House' ? $p['houseNo'] : $p['shopNumber'] }} → {{ $p['month'] }}
           </td>
           <td class="px-3 py-2 text-right">{{ number_format($p['amount'],2) }}</td>
         </tr>

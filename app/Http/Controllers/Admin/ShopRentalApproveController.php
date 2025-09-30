@@ -52,13 +52,20 @@ class ShopRentalApproveController extends Controller
                 $receiptPath = $request->file('recipt')->store('receipts', 'public');
             }
 
-            // If CASH and no amount provided, default to full bill
+            // Handle payment amount logic
             $paid = $data['paidAmount'] ?? null;
-            if ($data['paymentMethod'] === 'cash' && $paid === null) {
+            
+            if ($paid !== null) {
+                // For subsequent partial payments, ADD to existing amount
+                if ($r->status === 'PartPayment' && (float)$r->paidAmount > 0) {
+                    $paid = (float)$r->paidAmount + (float)$paid;
+                } else {
+                    $paid = (float)$paid;
+                }
+            } elseif ($data['paymentMethod'] === 'cash' && $r->status !== 'PartPayment') {
+                // Only auto-fill for first-time cash payments, not subsequent partial payments
                 $paid = (float) $r->billAmount;
-            }
-
-            if ($paid === null) {
+            } else {
                 $paid = (float) $r->paidAmount; // Keep existing paid amount
             }
 

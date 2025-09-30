@@ -41,6 +41,10 @@
     $balanceThisRow = max(0, $total - $paid);
     $outstanding = number_format($balanceThisRow, 2, '.', ''); // ✅ default for input
     $canPay = ($b->id === $latestPending) && $b->status !== 'Approved';
+    
+    // Allow payment for PartPayment status (partial payments enabled)
+    $allowPayment = $canPay && ($b->status !== 'Pending' || $b->status === 'PartPayment');
+    $isPaymentPending = in_array($b->status, ['Pending', 'ExtraPayment']) && $b->paidAmount > 0;
   @endphp
 
   <div class="bg-white rounded-lg p-4 mb-3 border">
@@ -83,11 +87,27 @@
 
     @if($b->status !== 'Approved')
       <div class="mt-3" x-data="{ method: '{{ $b->paymentMethod === 'card' ? 'card' : 'online' }}' }">
+        
+        @if($isPaymentPending)
+          <div class="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div class="flex items-center">
+              <div class="text-yellow-600">⏳</div>
+              <div class="ml-2 text-sm text-yellow-800">
+                @if($b->status === 'Pending')
+                  Payment submitted and awaiting admin approval
+                @elseif($b->status === 'ExtraPayment')
+                  Overpayment detected - awaiting admin review
+                @endif
+              </div>
+            </div>
+          </div>
+        @endif
+
         <div class="max-w-4xl grid grid-cols-1 sm:grid-cols-6 gap-3 items-end" x-cloak>
           {{-- Payment Method --}}
           <label class="sm:col-span-2">
             <span class="text-sm text-gray-600">Payment Method</span>
-            <select x-model="method" class="mt-1 w-full rounded border-gray-300 h-10" @disabled(!$canPay)>
+            <select x-model="method" class="mt-1 w-full rounded border-gray-300 h-10" @disabled(!$allowPayment)>
               <option value="card">Card</option>
               <option value="online">Bank Transfer</option>
             </select>
@@ -105,7 +125,7 @@
               class="mt-1 w-full rounded border-gray-300 h-10"
               value="{{ old('amount', $outstanding) }}"
               placeholder="{{ $outstanding }}"
-              @disabled(!$canPay)
+              @disabled(!$allowPayment)
             >
           </label>
 
@@ -118,7 +138,7 @@
               class="mt-1 w-full rounded border-gray-300 h-10"
               placeholder="e.g. HSC-12345"
               :required="method==='online'"
-              @disabled(!$canPay)
+              @disabled(!$allowPayment)
             >
           </label>
 
@@ -132,7 +152,7 @@
               class="mt-1 block w-full text-sm"
               accept="application/pdf,image/png,image/jpeg"
               :required="method==='online'"
-              @disabled(!$canPay)
+              @disabled(!$allowPayment)
             >
           </label>
         </div>
@@ -143,14 +163,20 @@
                         : '{{ route('customer.bills.pay.transfer',$b->id) }}'">
           @csrf
           <button
-            class="mt-3 px-3 py-2 rounded-lg text-white {{ $canPay ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed' }}"
-            @disabled(!$canPay)>
+            class="mt-3 px-3 py-2 rounded-lg text-white {{ $allowPayment ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed' }}"
+            @disabled(!$allowPayment)>
             Pay Now
           </button>
         </form>
 
-        @unless($canPay)
-          <p class="mt-2 text-xs text-gray-500">You can only pay the latest outstanding bill.</p>
+        @unless($allowPayment)
+          <p class="mt-2 text-xs text-gray-500">
+            @if(!$canPay)
+              You can only pay the latest outstanding bill.
+            @elseif($isPaymentPending)
+              Payment awaiting admin approval.
+            @endif
+          </p>
         @endunless
       </div>
     @endif

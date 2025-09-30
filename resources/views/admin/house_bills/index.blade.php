@@ -121,7 +121,7 @@
         @if($b->status === 'Approved')
           <button class="text-green-700 text-sm opacity-40 cursor-not-allowed" disabled>Approve</button>
         @else
-          @if(empty($b->paymentMethod))
+          @if(empty($b->paymentMethod) || $b->status === 'PartPayment')
             <button type="button" class="text-green-700 text-sm" x-data @click="$dispatch('open-modal','approve-{{ $b->id }}')">
               Approve
             </button>
@@ -139,16 +139,22 @@
       </div>
     </div>
 
-    @if($b->status !== 'Approved' && empty($b->paymentMethod))
+    @if($b->status !== 'Approved' && (empty($b->paymentMethod) || $b->status === 'PartPayment'))
       <x-modal :name="'approve-'.$b->id" :title="'Approve Bill #'.$b->id">
         <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="space-y-3">
           @csrf
-          <input type="hidden" name="paymentMethod" value="cash">
-          <p class="text-sm text-gray-600">Recording a <span class="font-medium">cash</span> payment.</p>
+          <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod ?: 'cash' }}">
+          <p class="text-sm text-gray-600">
+            Recording a <span class="font-medium">{{ $b->paymentMethod ?: 'cash' }}</span> payment.
+            @if($b->status === 'PartPayment')
+              <br><span class="text-orange-600">Additional payment for partial bill.</span>
+            @endif
+          </p>
           <label class="block">
             <span class="text-sm">Paid Amount</span>
             <input type="number" name="paidAmount" step="0.01" min="0"
-                   value="{{ old('paidAmount', $b->paidAmount > 0 ? $b->paidAmount : $b->billAmount) }}"
+                   value="{{ old('paidAmount', '') }}"
+                   placeholder="Enter additional amount"
                    class="mt-1 w-full rounded border-gray-300" required>
           </label>
           <div class="text-right">
@@ -216,7 +222,7 @@
           @if($b->status === 'Approved')
             <button class="text-green-700 opacity-40 cursor-not-allowed" disabled>Approve</button>
           @else
-            @if(empty($b->paymentMethod))
+            @if(empty($b->paymentMethod) || $b->status === 'PartPayment')
               <button type="button" class="text-green-700" x-data @click="$dispatch('open-modal','approve-{{ $b->id }}')">
                 Approve
               </button>
@@ -237,16 +243,22 @@
         </td>
       </tr>
 
-      @if($b->status !== 'Approved' && empty($b->paymentMethod))
+      @if($b->status !== 'Approved' && (empty($b->paymentMethod) || $b->status === 'PartPayment'))
         <x-modal :name="'approve-'.$b->id" :title="'Approve Bill #'.$b->id">
           <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="space-y-3">
             @csrf
-            <input type="hidden" name="paymentMethod" value="cash">
-            <p class="text-sm text-gray-600">Recording a <span class="font-medium">cash</span> payment.</p>
+            <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod ?: 'cash' }}">
+            <p class="text-sm text-gray-600">
+              Recording a <span class="font-medium">{{ $b->paymentMethod ?: 'cash' }}</span> payment.
+              @if($b->status === 'PartPayment')
+                <br><span class="text-orange-600">Additional payment for partial bill.</span>
+              @endif
+            </p>
             <label class="block">
               <span class="text-sm">Paid Amount</span>
               <input type="number" name="paidAmount" step="0.01" min="0"
-                     value="{{ old('paidAmount', $b->paidAmount > 0 ? $b->paidAmount : $b->billAmount) }}"
+                     value="{{ old('paidAmount', '') }}"
+                     placeholder="Enter additional amount"
                      class="mt-1 w-full rounded border-gray-300" required>
             </label>
             <div class="text-right">

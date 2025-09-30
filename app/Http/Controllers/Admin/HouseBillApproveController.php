@@ -97,8 +97,14 @@ class HouseBillApproveController extends Controller
 
             // Use explicit amount if provided; else for CASH assume "this month only" if nothing yet/short
             if (array_key_exists('paidAmount', $data) && $data['paidAmount'] !== null) {
-                $bill->paidAmount = (float)$data['paidAmount'];
-            } elseif ($data['paymentMethod'] === 'cash' && (float)$bill->paidAmount < (float)$bill->billAmount) {
+                // For subsequent partial payments, ADD to existing amount
+                if ($bill->status === 'PartPayment' && (float)$bill->paidAmount > 0) {
+                    $bill->paidAmount = (float)$bill->paidAmount + (float)$data['paidAmount'];
+                } else {
+                    $bill->paidAmount = (float)$data['paidAmount'];
+                }
+            } elseif ($data['paymentMethod'] === 'cash' && (float)$bill->paidAmount < (float)$bill->billAmount && $bill->status !== 'PartPayment') {
+                // Only auto-fill for first-time cash payments, not subsequent partial payments
                 $bill->paidAmount = (float)$bill->billAmount;
             }
 
