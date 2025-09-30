@@ -11,8 +11,8 @@
       <th class="px-3 py-2 text-left">Current</th>
       <th class="px-3 py-2 text-right">Usage</th>
       <th class="px-3 py-2 text-right">Bill</th>
-      <th class="px-3 py-2 text-left">Status</th>
-      <th class="px-3 py-2"></th>
+      <th class="px-6 py-2 text-left">Status</th>
+
     </x-slot:head>
     @foreach($rentals ?? [] as $b)
       @php $usage = max(0, ($b->readingUnit - $b->openingReadingUnit)); @endphp
@@ -22,12 +22,8 @@
         <td class="px-3 py-2">{{ $b->readingUnit }}</td>
         <td class="px-3 py-2 text-right">{{ $usage }}</td>
         <td class="px-3 py-2 text-right">{{ number_format($b->billAmount,2) }}</td>
-        <td class="px-3 py-2"><x-badge :status="$b->status"/></td>
-        <td class="px-3 py-2 text-right">
-          {{-- Optional edit reading if needed --}}
-          <a href="#" class="text-blue-600 hover:underline" x-data
-             @click.prevent="$dispatch('open-edit-{{ $b->id }}')">Edit Reading</a>
-        </td>
+        <td class="px-6 py-2"><x-badge :status="$b->status"/></td>
+       
       </tr>
 
       <x-modal :id="'edit-'.$b->id" title="Edit Reading ({{ $b->month }})">

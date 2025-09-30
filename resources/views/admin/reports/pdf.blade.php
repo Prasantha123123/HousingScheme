@@ -102,12 +102,8 @@
             font-weight: bold;
             color: #0066cc;
         }
-        .positive {
-            color: #28a745;
-        }
-        .negative {
-            color: #dc3545;
-        }
+        .positive { color: #28a745; }
+        .negative { color: #dc3545; }
         .footer {
             margin-top: 30px;
             text-align: center;
@@ -132,19 +128,19 @@
     <div class="summary">
         <div class="summary-item">
             <h4>Total Income (Cash)</h4>
-            <p class="currency positive">₹{{ number_format($total_income, 2) }}</p>
+            <p class="currency positive">Rs {{ number_format($total_income, 2) }}</p>
         </div>
         <div class="summary-item">
             <h4>Total Expenses</h4>
-            <p class="currency negative">₹{{ number_format($total_expenses, 2) }}</p>
+            <p class="currency negative">Rs {{ number_format($total_expenses, 2) }}</p>
         </div>
         <div class="summary-item">
             <h4>Pending Amount</h4>
-            <p class="currency" style="color: #ffc107;">₹{{ number_format($total_pending, 2) }}</p>
+            <p class="currency" style="color: #ffc107;">Rs {{ number_format($total_pending, 2) }}</p>
         </div>
         <div class="summary-item">
             <h4>Net Profit/Loss</h4>
-            <p class="currency {{ $net >= 0 ? 'positive' : 'negative' }}">₹{{ number_format($net, 2) }}</p>
+            <p class="currency {{ $net >= 0 ? 'positive' : 'negative' }}">Rs {{ number_format($net, 2) }}</p>
         </div>
     </div>
 
@@ -156,15 +152,15 @@
                 <h3>House Rentals</h3>
                 <div class="breakdown-item">
                     <span>Total Billed</span>
-                    <span class="currency">₹{{ number_format($house_total_billed, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($house_total_billed, 2) }}</span>
                 </div>
                 <div class="breakdown-item">
                     <span>Total Received</span>
-                    <span class="currency">₹{{ number_format($house_total_received, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($house_total_received, 2) }}</span>
                 </div>
                 <div class="breakdown-item">
                     <span>Pending Amount</span>
-                    <span class="currency" style="color: #ffc107;">₹{{ number_format($house_pending, 2) }}</span>
+                    <span class="currency" style="color: #ffc107;">Rs {{ number_format($house_pending, 2) }}</span>
                 </div>
             </div>
 
@@ -172,15 +168,15 @@
                 <h3>Shop Rentals</h3>
                 <div class="breakdown-item">
                     <span>Total Billed</span>
-                    <span class="currency">₹{{ number_format($shop_total_billed, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($shop_total_billed, 2) }}</span>
                 </div>
                 <div class="breakdown-item">
                     <span>Total Received</span>
-                    <span class="currency">₹{{ number_format($shop_total_received, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($shop_total_received, 2) }}</span>
                 </div>
                 <div class="breakdown-item">
                     <span>Pending Amount</span>
-                    <span class="currency" style="color: #ffc107;">₹{{ number_format($shop_pending, 2) }}</span>
+                    <span class="currency" style="color: #ffc107;">Rs {{ number_format($shop_pending, 2) }}</span>
                 </div>
             </div>
 
@@ -188,15 +184,15 @@
                 <h3>Grand Totals</h3>
                 <div class="breakdown-item">
                     <span>Total Billed</span>
-                    <span class="currency">₹{{ number_format($grand_total_billed, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($grand_total_billed, 2) }}</span>
                 </div>
                 <div class="breakdown-item">
                     <span>Total Received</span>
-                    <span class="currency">₹{{ number_format($grand_total_received, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($grand_total_received, 2) }}</span>
                 </div>
                 <div class="breakdown-item">
                     <span>Total Pending</span>
-                    <span class="currency" style="color: #ffc107;">₹{{ number_format($total_pending, 2) }}</span>
+                    <span class="currency" style="color: #ffc107;">Rs {{ number_format($total_pending, 2) }}</span>
                 </div>
             </div>
         </div>
@@ -210,19 +206,19 @@
                 <h3>Period Collections</h3>
                 <div class="breakdown-item">
                     <span>House Collections</span>
-                    <span class="currency">₹{{ number_format($income_house, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($income_house, 2) }}</span>
                 </div>
                 <div class="breakdown-item">
                     <span>Shop Collections</span>
-                    <span class="currency">₹{{ number_format($income_shop, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($income_shop, 2) }}</span>
                 </div>
                 <div class="breakdown-item">
                     <span>Inventory Sales</span>
-                    <span class="currency">₹{{ number_format($income_inv, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($income_inv, 2) }}</span>
                 </div>
                 <div class="breakdown-item">
                     <span>Total Collections</span>
-                    <span class="currency">₹{{ number_format($total_income, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($total_income, 2) }}</span>
                 </div>
             </div>
 
@@ -230,15 +226,15 @@
                 <h3>Period Billing</h3>
                 <div class="breakdown-item">
                     <span>House Bills</span>
-                    <span class="currency">₹{{ number_format($house_billed, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($house_billed, 2) }}</span>
                 </div>
                 <div class="breakdown-item">
                     <span>Shop Bills</span>
-                    <span class="currency">₹{{ number_format($shop_billed, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($shop_billed, 2) }}</span>
                 </div>
                 <div class="breakdown-item">
                     <span>Total Bills</span>
-                    <span class="currency">₹{{ number_format($total_billed, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($total_billed, 2) }}</span>
                 </div>
             </div>
 
@@ -246,15 +242,15 @@
                 <h3>Period Expenses</h3>
                 <div class="breakdown-item">
                     <span>Payroll</span>
-                    <span class="currency">₹{{ number_format($exp_payroll, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($exp_payroll, 2) }}</span>
                 </div>
                 <div class="breakdown-item">
                     <span>Other Expenses</span>
-                    <span class="currency">₹{{ number_format($exp_other, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($exp_other, 2) }}</span>
                 </div>
                 <div class="breakdown-item">
                     <span>Total Expenses</span>
-                    <span class="currency">₹{{ number_format($total_expenses, 2) }}</span>
+                    <span class="currency">Rs {{ number_format($total_expenses, 2) }}</span>
                 </div>
             </div>
         </div>
@@ -267,7 +263,7 @@
                 <p style="margin: 0; font-size: 14px; color: #666;">Cash Flow (Period)</p>
                 <p style="margin: 5px 0; font-size: 18px;">
                     <span class="currency {{ $net >= 0 ? 'positive' : 'negative' }}">
-                        ₹{{ number_format($net, 2) }}
+                        Rs {{ number_format($net, 2) }}
                     </span>
                 </p>
             </div>
@@ -275,7 +271,7 @@
                 <p style="margin: 0; font-size: 14px; color: #666;">Outstanding (Total)</p>
                 <p style="margin: 5px 0; font-size: 18px;">
                     <span class="currency" style="color: #ffc107;">
-                        ₹{{ number_format($total_pending, 2) }}
+                        Rs {{ number_format($total_pending, 2) }}
                     </span>
                 </p>
             </div>

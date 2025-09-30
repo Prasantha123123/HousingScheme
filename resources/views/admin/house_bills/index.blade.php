@@ -6,25 +6,49 @@
 
 {{-- Filters --}}
 <form method="get"
-      class="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
-  <input class="rounded border-gray-300 w-full" type="month" name="month" value="{{ request('month') }}" placeholder="Month">
-  <input class="rounded border-gray-300 w-full" type="date" name="from_date" value="{{ request('from_date') }}" placeholder="From Date">
-  <input class="rounded border-gray-300 w-full" type="date" name="to_date" value="{{ request('to_date') }}" placeholder="To Date">
-  <select name="status" class="rounded border-gray-300 w-full">
-    <option value="">All Status</option>
-    @foreach (['Pending','PartPayment','ExtraPayment','Approved','Rejected'] as $s)
-      <option @selected(request('status') === $s)>{{ $s }}</option>
-    @endforeach
-  </select>
-  <input class="rounded border-gray-300 w-full" type="text" name="houseNo" placeholder="House No" value="{{ request('houseNo') }}">
-  <select name="method" class="rounded border-gray-300 w-full">
-    <option value="">Any Method</option>
-    @foreach (['cash','card','online'] as $m)
-      <option @selected(request('method') === $m) value="{{ $m }}">{{ ucfirst($m) }}</option>
-    @endforeach
-  </select>
-  <div class="flex gap-2">
-    <button class="px-3 py-2 bg-gray-900 text-white rounded-lg flex-1">Filter</button>
+      class="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-3">
+  <label class="block">
+    <span class="text-sm text-gray-700">Month</span>
+    <input class="mt-1 rounded border-gray-300 w-full" type="month" name="month" value="{{ request('month') }}">
+  </label>
+
+  <label class="block">
+    <span class="text-sm text-gray-700">From</span>
+    <input class="mt-1 rounded border-gray-300 w-full" type="date" name="from_date" value="{{ request('from_date') }}">
+  </label>
+
+  <label class="block">
+    <span class="text-sm text-gray-700">To</span>
+    <input class="mt-1 rounded border-gray-300 w-full" type="date" name="to_date" value="{{ request('to_date') }}">
+  </label>
+
+  <label class="block">
+    <span class="text-sm text-gray-700">Status</span>
+    <select name="status" class="mt-1 rounded border-gray-300 w-full">
+      <option value="">All Status</option>
+      @foreach (['Pending','PartPayment','ExtraPayment','Approved','Rejected'] as $s)
+        <option @selected(request('status') === $s)>{{ $s }}</option>
+      @endforeach
+    </select>
+  </label>
+
+  <label class="block">
+    <span class="text-sm text-gray-700">House No</span>
+    <input class="mt-1 rounded border-gray-300 w-full" type="text" name="houseNo" placeholder="House No" value="{{ request('houseNo') }}">
+  </label>
+
+  <label class="block">
+    <span class="text-sm text-gray-700">Method</span>
+    <select name="method" class="mt-1 rounded border-gray-300 w-full">
+      <option value="">Any Method</option>
+      @foreach (['cash','card','online'] as $m)
+        <option @selected(request('method') === $m) value="{{ $m }}">{{ ucfirst($m) }}</option>
+      @endforeach
+    </select>
+  </label>
+
+  <div class="sm:col-span-2 md:col-span-3 lg:col-span-6 flex gap-2">
+    <button class="px-3 py-2 bg-gray-900 text-white rounded-lg flex-1 sm:flex-none">Filter</button>
     <a href="{{ route('admin.house-bills.pdf', request()->query()) }}" 
        class="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-center whitespace-nowrap">
       📄 PDF
@@ -88,61 +112,33 @@
         </div>
       </div>
 
-      <div class="mt-3 grid grid-cols-3 gap-2 items-end">
-        <div>
-          <div class="text-xs text-gray-500">Bill</div>
-          <div class="text-base font-semibold">{{ number_format($b->billAmount,2) }}</div>
-        </div>
-        <div class="text-center">
-          <div class="text-xs text-gray-500">Paid</div>
-          <div class="text-base font-semibold">{{ number_format($b->paidAmount,2) }}</div>
-        </div>
-        <div class="text-right">
-          <div class="text-xs text-gray-500">Balance</div>
-          <div class="text-base font-semibold">{{ number_format($balance,2) }}</div>
-        </div>
-      </div>
+      {{-- actions (no select checkbox) --}}
+      <div class="mt-3 flex items-center justify-end gap-3">
+        @if($b->recipt)
+          <a class="text-blue-600 hover:underline text-sm" target="_blank" href="{{ asset('storage/'.$b->recipt) }}">Open</a>
+        @endif
 
-      <div class="mt-3 flex items-center justify-between gap-3">
-        <label class="inline-flex items-center gap-2">
-          <input type="checkbox"
-                 name="ids[]"
-                 value="{{ $b->id }}"
-                 class="rounded border-gray-300"
-                 @if($b->status === 'Approved') disabled @endif>
-          <span class="text-sm text-gray-600">Select</span>
-        </label>
-
-        <div class="flex items-center gap-3">
-          @if($b->recipt)
-            <a class="text-blue-600 hover:underline text-sm" target="_blank" href="{{ asset('storage/'.$b->recipt) }}">Open</a>
-          @endif
-
-          {{-- Approve: CASH-only modal if method not set --}}
-          @if($b->status === 'Approved')
-            <button class="text-green-700 text-sm opacity-40 cursor-not-allowed" disabled>Approve</button>
+        @if($b->status === 'Approved')
+          <button class="text-green-700 text-sm opacity-40 cursor-not-allowed" disabled>Approve</button>
+        @else
+          @if(empty($b->paymentMethod))
+            <button type="button" class="text-green-700 text-sm" x-data @click="$dispatch('open-modal','approve-{{ $b->id }}')">
+              Approve
+            </button>
           @else
-            @if(empty($b->paymentMethod))
-              <button type="button" class="text-green-700 text-sm" x-data @click="$dispatch('open-modal','approve-{{ $b->id }}')">
-                Approve
-              </button>
-            @else
-              <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="inline">
-                @csrf
-                <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod }}">
-                <button class="text-green-700 text-sm">Approve</button>
-              </form>
-            @endif
+            <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="inline">
+              @csrf
+              <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod }}">
+              <button class="text-green-700 text-sm">Approve</button>
+            </form>
           @endif
+        @endif
 
-          {{-- Reject --}}
-          <button type="button" class="text-red-700 text-sm" x-data
-                  @click="$dispatch('open-modal','reject-{{ $b->id }}')">Reject</button>
-        </div>
+        <button type="button" class="text-red-700 text-sm" x-data
+                @click="$dispatch('open-modal','reject-{{ $b->id }}')">Reject</button>
       </div>
     </div>
 
-    {{-- CASH-ONLY Approve modal (mobile) --}}
     @if($b->status !== 'Approved' && empty($b->paymentMethod))
       <x-modal :name="'approve-'.$b->id" :title="'Approve Bill #'.$b->id">
         <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="space-y-3">
@@ -162,7 +158,6 @@
       </x-modal>
     @endif
 
-    {{-- Reject modal (mobile) --}}
     <x-modal :name="'reject-'.$b->id" :title="'Reject Bill #'.$b->id">
       <form method="post" action="{{ route('admin.house-bills.reject',$b->id) }}" class="space-y-3">
         @csrf
@@ -184,16 +179,11 @@
 <div class="hidden sm:block overflow-x-auto -mx-4 md:mx-0">
   <x-table>
     <x-slot:head>
-      <th class="px-3 py-2">
-        <input type="checkbox"
-               x-data
-               @change="$el.closest('table').querySelectorAll('tbody input[type=checkbox]').forEach(c=>{ if(!c.disabled) c.checked=$el.checked })">
-      </th>
       <th class="px-3 py-2 text-left">House No</th>
       <th class="px-3 py-2 text-left">Month</th>
       <th class="px-3 py-2 text-left hidden md:table-cell">Reading</th>
       <th class="px-3 py-2 text-right hidden md:table-cell">Usage</th>
-       <th class="px-3 py-2 text-right">Bill</th>
+      <th class="px-3 py-2 text-right">Bill</th>
       <th class="px-3 py-2 text-right">Paid</th>
       <th class="px-3 py-2 text-right">Balance</th>
       <th class="px-3 py-2 hidden lg:table-cell">Method</th>
@@ -208,12 +198,6 @@
         $balance = max(0, (float)$b->billAmount - (float)$b->paidAmount);
       @endphp
       <tr class="hover:bg-gray-50">
-        <td class="px-3 py-2">
-          <input type="checkbox"
-                 name="ids[]"
-                 value="{{ $b->id }}"
-                 @if($b->status === 'Approved') disabled @endif>
-        </td>
         <td class="px-3 py-2">{{ $b->houseNo }}</td>
         <td class="px-3 py-2">{{ $b->month }}</td>
         <td class="px-3 py-2 hidden md:table-cell">{{ $b->openingReadingUnit }} → {{ $b->readingUnit }}</td>
@@ -253,7 +237,6 @@
         </td>
       </tr>
 
-      {{-- CASH-ONLY Approve modal (desktop) --}}
       @if($b->status !== 'Approved' && empty($b->paymentMethod))
         <x-modal :name="'approve-'.$b->id" :title="'Approve Bill #'.$b->id">
           <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="space-y-3">
@@ -273,7 +256,6 @@
         </x-modal>
       @endif
 
-      {{-- Reject modal (desktop) --}}
       <x-modal :name="'reject-'.$b->id" :title="'Reject Bill #'.$b->id">
         <form method="post" action="{{ route('admin.house-bills.reject',$b->id) }}" class="space-y-3">
           @csrf
@@ -287,7 +269,7 @@
         </form>
       </x-modal>
     @empty
-      <tr><td class="px-3 py-6 text-gray-500" colspan="14">No data</td></tr>
+      <tr><td class="px-3 py-6 text-gray-500" colspan="11">No data</td></tr>
     @endforelse
   </x-table>
 </div>

@@ -7,14 +7,26 @@
 </div>
 
 {{-- Filters --}}
-<form method="get" class="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-3">
-  <input class="rounded border-gray-300 w-full" type="date" name="from_date" value="{{ request('from_date') }}" placeholder="From Date">
-  <input class="rounded border-gray-300 w-full" type="date" name="to_date" value="{{ request('to_date') }}" placeholder="To Date">
-  <input class="rounded border-gray-300 w-full" type="text" name="name" placeholder="Expense Name" value="{{ request('name') }}">
-  
-  <div class="flex gap-2">
-    <button class="px-3 py-2 bg-gray-900 text-white rounded-lg flex-1">Filter</button>
-    <a href="{{ route('admin.expenses.pdf', request()->query()) }}" 
+<form method="get"
+      class="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-3">
+  <label class="block">
+    <span class="text-sm text-gray-700">From</span>
+    <input class="mt-1 rounded border-gray-300 w-full" type="date" name="from_date" value="{{ request('from_date') }}">
+  </label>
+
+  <label class="block">
+    <span class="text-sm text-gray-700">To</span>
+    <input class="mt-1 rounded border-gray-300 w-full" type="date" name="to_date" value="{{ request('to_date') }}">
+  </label>
+
+  <label class="block">
+    <span class="text-sm text-gray-700">Expense Name</span>
+    <input class="mt-1 rounded border-gray-300 w-full" type="text" name="name" value="{{ request('name') }}" placeholder="Expense name">
+  </label>
+
+  <div class="flex items-end gap-2">
+    <button class="px-3 py-2 bg-gray-900 text-white rounded-lg">Filter</button>
+    <a href="{{ route('admin.expenses.pdf', request()->query()) }}"
        class="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-center whitespace-nowrap">
       📄 PDF
     </a>
@@ -22,9 +34,20 @@
 </form>
 
 @php
-  $items = $rows ?? collect();
-  $total = collect($items)->sum('amount');
+  // Normalize $rows to a collection
+  $raw   = $rows ?? collect();
+  $items = $raw instanceof \Illuminate\Pagination\AbstractPaginator ? collect($raw->items()) : collect($raw);
+
+  // Sum safely
+  $total = $items->sum(fn($e) => (float) ($e->amount ?? 0));
 @endphp
+
+{{-- Top summary --}}
+@if($items->count())
+  <div class="rounded-lg border bg-gray-50 p-3 mb-3 text-right font-medium">
+    Total Amount: {{ number_format($total, 2) }}
+  </div>
+@endif
 
 {{-- Mobile: card list --}}
 <div class="sm:hidden space-y-3">
@@ -38,9 +61,7 @@
       </div>
 
       @if(!empty($e->note))
-        <div class="mt-1 text-sm text-gray-700 break-words">
-          {{ $e->note }}
-        </div>
+        <div class="mt-1 text-sm text-gray-700 break-words">{{ $e->note }}</div>
       @endif
 
       <div class="mt-2 flex items-center justify-between">
@@ -59,15 +80,9 @@
   @empty
     <div class="rounded-lg border bg-white p-4 text-gray-500">No expenses</div>
   @endforelse
-
-  @if(count($items))
-    <div class="rounded-lg border bg-gray-50 p-3 text-right font-medium">
-      Month Total: {{ number_format($total,2) }}
-    </div>
-  @endif
 </div>
 
-{{-- Tablet / Desktop: original table --}}
+{{-- Tablet / Desktop: table --}}
 <div class="hidden sm:block overflow-x-auto -mx-4 md:mx-0">
   <x-table>
     <x-slot:head>
@@ -96,11 +111,13 @@
       <tr><td class="px-3 py-6 text-gray-500" colspan="5">No expenses</td></tr>
     @endforelse
 
-    <tr class="bg-gray-50 font-medium">
-      <td class="px-3 py-2" colspan="2">Month Total</td>
-      <td class="px-3 py-2 text-right">{{ number_format($total,2) }}</td>
-      <td class="px-3 py-2" colspan="2"></td>
-    </tr>
+    @if($items->count())
+      <tr class="bg-gray-50 font-medium">
+        <td class="px-3 py-2" colspan="2">Total Amount</td>
+        <td class="px-3 py-2 text-right">{{ number_format($total,2) }}</td>
+        <td class="px-3 py-2" colspan="2"></td>
+      </tr>
+    @endif
   </x-table>
 </div>
 

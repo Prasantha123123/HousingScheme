@@ -6,8 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Shop;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+// NEW: bring in rentals so we can show latest status/bill like Houses
+use App\Models\ShopRental;
 
 class ShopController extends Controller
 {
@@ -22,7 +23,21 @@ class ShopController extends Controller
                   ->orWhereHas('merchant', fn($m) => $m->where('name', 'like', "%{$q}%"));
             })
             ->orderBy('shopNumber')
-            ->paginate(15);
+            ->paginate(15)
+            // Decorate rows exactly like Houses ->through()
+            ->through(function (Shop $s) {
+                $latest = ShopRental::where('shopNumber', $s->shopNumber)
+                    ->orderByDesc('timestamp')
+                    ->first();
+
+                // mirror house fields for view convenience
+                $s->merchant_name       = optional($s->merchant)->name ?? 'Unassigned';
+                $s->latest_bill_month   = optional($latest)->month;
+                $s->latest_bill_amount  = optional($latest)->billAmount;
+                $s->latest_status       = optional($latest)->status ?? 'Pending';
+
+                return $s;
+            });
 
         return view('admin.shops.index', compact('rows'));
     }
@@ -43,17 +58,13 @@ class ShopController extends Controller
             'MerchantId'   => [
                 'nullable','integer',
                 Rule::exists('users','id')->where(fn($q) => $q->where('role','Merchant')),
-                // (No unique rule here → one merchant can own multiple shops if you want)
             ],
             'leaseEnd'     => ['nullable','date'],
             'rentalAmount' => ['required','numeric','min:0'],
-            'shop_password'=> ['required_without:MerchantId','nullable','string','min:6'], // required if no merchant
+            'shop_password'=> ['required_without:MerchantId','nullable','string','min:6'],
         ], [
             'shop_password.required_without' => 'Set a shop password when no merchant is selected.',
         ]);
-
-        // Handle password creation - store as plain text for admin visibility
-        // Note: shop_password is stored as plain text for admin reference
 
         Shop::create($data);
 
@@ -75,22 +86,18 @@ class ShopController extends Controller
     {
         $shop = Shop::findOrFail($shopNumber);
 
+        // Require password on update (as requested to match House)
         $data = $request->validate([
-            'MerchantId'   => [
+            'MerchantId'    => [
                 'nullable','integer',
                 Rule::exists('users','id')->where(fn($q) => $q->where('role','Merchant')),
             ],
-            'leaseEnd'     => ['nullable','date'],
-            'rentalAmount' => ['required','numeric','min:0'],
-            'shop_password'=> ['nullable','string','min:6'], // optional on edit
+            'leaseEnd'      => ['nullable','date'],
+            'rentalAmount'  => ['required','numeric','min:0'],
+            'shop_password' => ['required','string','min:6'],
+        ], [
+            'shop_password.required' => 'The password field is required when updating.',
         ]);
-
-        // Handle password update - store as plain text for admin visibility
-        // Note: shop_password is stored as plain text for admin reference
-        // If password field is empty, don't update it
-        if (empty($data['shop_password'])) {
-            unset($data['shop_password']); // don't overwrite with null
-        }
 
         $shop->update($data);
 
@@ -100,12 +107,6 @@ class ShopController extends Controller
     public function destroy(string $shopNumber)
     {
         $shop = Shop::findOrFail($shopNumber);
-
-        // Optional guard:
-        // if (\App\Models\ShopRental::where('shopNumber', $shopNumber)->exists()) {
-        //     return back()->withErrors('Cannot delete: rentals exist for this shop.');
-        // }
-
         $shop->delete();
 
         return redirect()->route('admin.shops.index')->with('success', 'Shop deleted.');

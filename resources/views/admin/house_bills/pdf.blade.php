@@ -71,12 +71,9 @@
             font-weight: bold;
             color: #333;
         }
-        .text-right {
-            text-align: right;
-        }
-        .text-center {
-            text-align: center;
-        }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
         .status-badge {
             padding: 4px 8px;
             border-radius: 3px;
@@ -89,6 +86,7 @@
         .status-rejected { background-color: #f8d7da; color: #721c24; }
         .status-partpayment { background-color: #cff4fc; color: #055160; }
         .status-extrapayment { background-color: #e2e3e5; color: #383d41; }
+
         .footer {
             margin-top: 30px;
             text-align: center;
@@ -103,9 +101,7 @@
             color: #666;
             font-style: italic;
         }
-        @page {
-            margin: 15mm;
-        }
+        @page { margin: 15mm; }
     </style>
 </head>
 <body>
@@ -123,15 +119,15 @@
             <div class="summary-grid">
                 <div class="summary-item">
                     <div class="label">Total Bill Amount</div>
-                    <div class="value">₹{{ number_format($totalBillAmount, 2) }}</div>
+                    <div class="value">Rs {{ number_format($totalBillAmount, 2) }}</div>
                 </div>
                 <div class="summary-item">
                     <div class="label">Total Paid Amount</div>
-                    <div class="value">₹{{ number_format($totalPaidAmount, 2) }}</div>
+                    <div class="value">Rs {{ number_format($totalPaidAmount, 2) }}</div>
                 </div>
                 <div class="summary-item">
                     <div class="label">Total Outstanding</div>
-                    <div class="value">₹{{ number_format($totalBalance, 2) }}</div>
+                    <div class="value">Rs {{ number_format($totalBalance, 2) }}</div>
                 </div>
             </div>
         </div>
@@ -161,11 +157,11 @@
                     <tr>
                         <td>{{ $bill->houseNo }}</td>
                         <td>{{ $bill->month }}</td>
-                        <td>{{ $bill->openingReadingUnit }} → {{ $bill->readingUnit }}</td>
+                        <td>{{ $bill->openingReadingUnit }} -&gt; {{ $bill->readingUnit }}</td>
                         <td class="text-right">{{ $usage }}</td>
-                        <td class="text-right">₹{{ number_format($bill->billAmount, 2) }}</td>
-                        <td class="text-right">₹{{ number_format($bill->paidAmount, 2) }}</td>
-                        <td class="text-right">₹{{ number_format($balance, 2) }}</td>
+                        <td class="text-right">Rs {{ number_format($bill->billAmount, 2) }}</td>
+                        <td class="text-right">Rs {{ number_format($bill->paidAmount, 2) }}</td>
+                        <td class="text-right">Rs {{ number_format($balance, 2) }}</td>
                         <td class="text-center">{{ $bill->paymentMethod ? strtoupper($bill->paymentMethod) : '-' }}</td>
                         <td class="text-center">
                             <span class="status-badge {{ $statusClass }}">{{ $bill->status }}</span>
@@ -178,9 +174,9 @@
 
         <div style="margin-top: 20px; font-size: 11px;">
             <strong>Total Records:</strong> {{ $bills->count() }} |
-            <strong>Water Unit Price:</strong> ₹{{ number_format($unitPrice, 2) }} per unit |
-            <strong>Sewerage Charge:</strong> ₹{{ number_format($sewerage, 2) }} |
-            <strong>Service Charge:</strong> ₹{{ number_format($service, 2) }}
+            <strong>Water Unit Price:</strong> Rs {{ number_format($unitPrice, 2) }} per unit |
+            <strong>Sewerage Charge:</strong> Rs {{ number_format($sewerage, 2) }} |
+            <strong>Service Charge:</strong> Rs {{ number_format($service, 2) }}
         </div>
     @else
         <div class="no-data">

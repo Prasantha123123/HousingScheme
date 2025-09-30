@@ -7,14 +7,26 @@
 </div>
 
 {{-- Filters --}}
-<form method="get" class="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-3">
-  <input class="rounded border-gray-300 w-full" type="date" name="from_date" value="{{ request('from_date') }}" placeholder="From Date">
-  <input class="rounded border-gray-300 w-full" type="date" name="to_date" value="{{ request('to_date') }}" placeholder="To Date">
-  <input class="rounded border-gray-300 w-full" type="text" name="item" placeholder="Item Name" value="{{ request('item') }}">
-  
-  <div class="flex gap-2">
-    <button class="px-3 py-2 bg-gray-900 text-white rounded-lg flex-1">Filter</button>
-    <a href="{{ route('admin.inventory-sales.pdf', request()->query()) }}" 
+<form method="get"
+      class="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 mb-3">
+  <label class="block">
+    <span class="text-sm text-gray-700">From</span>
+    <input class="mt-1 rounded border-gray-300 w-full" type="date" name="from_date" value="{{ request('from_date') }}">
+  </label>
+
+  <label class="block">
+    <span class="text-sm text-gray-700">To</span>
+    <input class="mt-1 rounded border-gray-300 w-full" type="date" name="to_date" value="{{ request('to_date') }}">
+  </label>
+
+  <label class="block">
+    <span class="text-sm text-gray-700">Item Name</span>
+    <input class="mt-1 rounded border-gray-300 w-full" type="text" name="item" value="{{ request('item') }}" placeholder="Item name">
+  </label>
+
+  <div class="flex items-end gap-2">
+    <button class="px-3 py-2 bg-gray-900 text-white rounded-lg">Filter</button>
+    <a href="{{ route('admin.inventory-sales.pdf', request()->query()) }}"
        class="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-center whitespace-nowrap">
       📄 PDF
     </a>
@@ -22,8 +34,12 @@
 </form>
 
 @php
-  $items = $rows ?? collect();
-  $total = collect($items)->sum('total');
+    // $rows may be a paginator; normalize to a collection before summing.
+    $raw   = $rows ?? collect();
+    $items = $raw instanceof \Illuminate\Pagination\AbstractPaginator ? collect($raw->items()) : collect($raw);
+
+    // Sum safely (cast to float to avoid string math)
+    $total = $items->sum(fn($r) => (float) ($r->total ?? 0));
 @endphp
 
 {{-- ===== Mobile: cards ===== --}}
@@ -33,9 +49,7 @@
       <div class="flex items-start justify-between gap-2">
         <div>
           <div class="text-xs text-gray-500">Date</div>
-          <div class="font-medium">
-            {{ \Illuminate\Support\Carbon::parse($row->date)->toDateString() }}
-          </div>
+          <div class="font-medium">{{ \Illuminate\Support\Carbon::parse($row->date)->toDateString() }}</div>
         </div>
         <div class="text-right">
           <div class="text-xs text-gray-500">Total</div>
@@ -46,7 +60,7 @@
       <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
         <div>
           <div class="text-gray-500">Item</div>
-          <div class="font-medium">{{ $row->item }}</div>
+          <div class="font-medium break-words">{{ $row->item }}</div>
         </div>
         <div class="text-right">
           <div class="text-gray-500">Qty × Unit</div>
@@ -55,9 +69,7 @@
       </div>
 
       @if(!empty($row->note))
-        <div class="mt-2 text-sm text-gray-700 break-words">
-          {{ $row->note }}
-        </div>
+        <div class="mt-2 text-sm text-gray-700 break-words">{{ $row->note }}</div>
       @endif
 
       <div class="mt-3 flex items-center justify-end gap-3">
@@ -72,7 +84,7 @@
     <div class="rounded-lg border bg-white p-4 text-gray-500">No sales</div>
   @endforelse
 
-  @if(count($items))
+  @if($items->count())
     <div class="rounded-lg border bg-gray-50 p-3 text-right font-medium">
       Month Total: {{ number_format($total,2) }}
     </div>
@@ -112,7 +124,7 @@
       <tr><td class="px-3 py-6 text-gray-500" colspan="7">No sales</td></tr>
     @endforelse
 
-    @if(count($items))
+    @if($items->count())
       <tr class="bg-gray-50 font-medium">
         <td class="px-3 py-2" colspan="4">Month Total</td>
         <td class="px-3 py-2 text-right">{{ number_format($total,2) }}</td>

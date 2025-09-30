@@ -132,7 +132,7 @@
     <div class="summary">
         <div class="summary-item">
             <h4>Total Expenses</h4>
-            <p class="currency">₹{{ number_format($expenses->sum('amount'), 2) }}</p>
+            <p class="currency">Rs {{ number_format($expenses->sum('amount'), 2) }}</p>
         </div>
         <div class="summary-item">
             <h4>Total Records</h4>
@@ -140,7 +140,7 @@
         </div>
         <div class="summary-item">
             <h4>Average Expense</h4>
-            <p class="currency">₹{{ $expenses->count() > 0 ? number_format($expenses->avg('amount'), 2) : '0.00' }}</p>
+            <p class="currency">Rs {{ $expenses->count() > 0 ? number_format($expenses->avg('amount'), 2) : '0.00' }}</p>
         </div>
     </div>
 
@@ -160,7 +160,7 @@
                     <td>{{ $index + 1 }}</td>
                     <td>{{ \Carbon\Carbon::parse($expense->date)->format('M j, Y') }}</td>
                     <td>{{ $expense->name }}</td>
-                    <td class="text-right currency">₹{{ number_format($expense->amount, 2) }}</td>
+                    <td class="text-right currency">Rs {{ number_format($expense->amount, 2) }}</td>
                     <td>{{ $expense->note ?: '-' }}</td>
                 </tr>
             @empty
@@ -175,7 +175,7 @@
             <tfoot>
                 <tr class="total-row">
                     <td colspan="3" class="text-right"><strong>Total:</strong></td>
-                    <td class="text-right currency"><strong>₹{{ number_format($expenses->sum('amount'), 2) }}</strong></td>
+                    <td class="text-right currency"><strong>Rs {{ number_format($expenses->sum('amount'), 2) }}</strong></td>
                     <td></td>
                 </tr>
             </tfoot>

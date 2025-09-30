@@ -3,44 +3,89 @@
 @section('content')
 <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
   <h1 class="text-xl font-semibold">Shop Rentals</h1>
-
-  <a href="{{ route('admin.shops.create') }}" class="px-3 py-2 bg-gray-900 text-white rounded-lg">
-    Add Shop
-  </a>
+  {{-- <a href="{{ route('admin.shops.create') }}" class="px-3 py-2 bg-gray-900 text-white rounded-lg">Add Shop</a> --}}
 </div>
 
-{{-- Filters --}}
+{{-- Filters (labels + real placeholders, UI unchanged otherwise) --}}
 <form method="get" class="bg-white rounded-lg p-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
-  <input class="rounded border-gray-300 w-full" type="month" name="month" value="{{ request('month') }}" placeholder="Month">
-  <input class="rounded border-gray-300 w-full" type="date" name="from_date" value="{{ request('from_date') }}" placeholder="From Date">
-  <input class="rounded border-gray-300 w-full" type="date" name="to_date" value="{{ request('to_date') }}" placeholder="To Date">
-  <input class="rounded border-gray-300 w-full" type="text" name="shopNumber" placeholder="Shop No" value="{{ request('shopNumber') }}">
 
-  <select name="status" class="rounded border-gray-300 w-full">
-    <option value="">All Status</option>
-    @foreach(['Pending','InProgress','Approved','Rejected'] as $s)
-      <option @selected(request('status')===$s)>{{ $s }}</option>
-    @endforeach
-  </select>
+  <label class="block">
+    <span class="text-sm text-gray-700">Month</span>
+    <input
+      class="mt-1 rounded border-gray-300 w-full"
+      type="text"
+      name="month"
+      value="{{ request('month') }}"
+      placeholder="-------- ----"
+      autocomplete="off"
+      onfocus="this.type='month'"
+      onblur="if(!this.value) this.type='text'">
+  </label>
 
-  {{-- Any Method --}}
-  <select name="method" class="rounded border-gray-300 w-full">
-    <option value="">Any Method</option>
-    @foreach (['cash','card','online'] as $m)
-      <option value="{{ $m }}" @selected(request('method')===$m)>{{ ucfirst($m) }}</option>
-    @endforeach
-  </select>
+  <label class="block">
+    <span class="text-sm text-gray-700">From</span>
+    <input
+      class="mt-1 rounded border-gray-300 w-full"
+      type="text"
+      name="from_date"
+      value="{{ request('from_date') }}"
+      placeholder="mm/dd/yyyy"
+      autocomplete="off"
+      onfocus="this.type='date'"
+      onblur="if(!this.value) this.type='text'">
+  </label>
 
-  <div class="flex gap-2">
-    <button class="px-3 py-2 bg-gray-900 text-white rounded-lg flex-1">Filter</button>
-    <a href="{{ route('admin.shop-rentals.pdf', request()->query()) }}" 
+  <label class="block">
+    <span class="text-sm text-gray-700">To</span>
+    <input
+      class="mt-1 rounded border-gray-300 w-full"
+      type="text"
+      name="to_date"
+      value="{{ request('to_date') }}"
+      placeholder="mm/dd/yyyy"
+      autocomplete="off"
+      onfocus="this.type='date'"
+      onblur="if(!this.value) this.type='text'">
+  </label>
+
+  <label class="block">
+    <span class="text-sm text-gray-700">Shop No</span>
+    <input
+      class="mt-1 rounded border-gray-300 w-full"
+      type="text"
+      name="shopNumber"
+      placeholder="Shop No"
+      value="{{ request('shopNumber') }}">
+  </label>
+
+  <label class="block">
+    <span class="text-sm text-gray-700">Status</span>
+    <select name="status" class="mt-1 rounded border-gray-300 w-full">
+      <option value="">All Status</option>
+      @foreach(['Pending','InProgress','Approved','Rejected'] as $s)
+        <option @selected(request('status')===$s)>{{ $s }}</option>
+      @endforeach
+    </select>
+  </label>
+
+  <label class="block">
+    <span class="text-sm text-gray-700">Method</span>
+    <select name="method" class="mt-1 rounded border-gray-300 w-full">
+      <option value="">Any Method</option>
+      @foreach (['cash','card','online'] as $m)
+        <option value="{{ $m }}" @selected(request('method')===$m)>{{ ucfirst($m) }}</option>
+      @endforeach
+    </select>
+  </label>
+
+  <div class="flex gap-2 col-span-1 sm:col-span-2 md:col-span-3 lg:col-span-6">
+    <button class="px-3 py-2 bg-gray-900 text-white rounded-lg">Filter</button>
+    <a href="{{ route('admin.shop-rentals.pdf', request()->query()) }}"
        class="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-center whitespace-nowrap">
       📄 PDF
     </a>
   </div>
 </form>
-
-
 
 {{-- ===== Mobile: cards ===== --}}
 <div class="sm:hidden space-y-3">
@@ -87,50 +132,35 @@
         @endif
       </div>
 
-      <div class="mt-3 flex items-center justify-between gap-3">
-        <label class="inline-flex items-center gap-2">
-          <input type="checkbox"
-                 name="ids[]"
-                 value="{{ $r->id }}"
-                 class="rounded border-gray-300"
-                 @if($r->status === 'Approved') disabled @endif>
-          <span class="text-sm text-gray-600">Select</span>
-        </label>
-
-        <div class="flex items-center gap-3">
-          {{-- Approve: CASH modal if method is empty; else one-click using existing method --}}
-          @if($r->status === 'Approved')
-            <button class="px-2 py-1 text-green-700 opacity-40 cursor-not-allowed" disabled>Approve</button>
+      <div class="mt-3 flex items-center justify-end gap-3">
+        @if($r->status === 'Approved')
+          <button class="px-2 py-1 text-green-700 opacity-40 cursor-not-allowed" disabled>Approve</button>
+        @else
+          @if(empty($r->paymentMethod))
+            <button type="button" class="px-2 py-1 text-green-700" x-data @click="$dispatch('open-modal','approve-{{ $r->id }}')">
+              Approve
+            </button>
           @else
-            @if(empty($r->paymentMethod))
-              <button type="button" class="px-2 py-1 text-green-700" x-data @click="$dispatch('open-modal','approve-{{ $r->id }}')">
-                Approve
-              </button>
-            @else
-              <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="inline">
-                @csrf
-                <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod }}">
-                {{-- If method already cash, default to full --}}
-                @if($r->paymentMethod === 'cash' && (float)$r->paidAmount <= 0)
-                  <input type="hidden" name="paidAmount" value="{{ $r->billAmount }}">
-                @endif
-                <button class="px-2 py-1 text-green-700">Approve</button>
-              </form>
-            @endif
-          @endif
-
-          {{-- Reject --}}
-          @if($r->status !== 'Approved')
-            <form method="post" action="{{ route('admin.shop-rentals.reject',$r->id) }}" class="inline">
+            <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="inline">
               @csrf
-              <button class="px-2 py-1 text-red-700">Reject</button>
+              <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod }}">
+              @if($r->paymentMethod === 'cash' && (float)$r->paidAmount <= 0)
+                <input type="hidden" name="paidAmount" value="{{ $r->billAmount }}">
+              @endif
+              <button class="px-2 py-1 text-green-700">Approve</button>
             </form>
           @endif
-        </div>
+        @endif
+
+        @if($r->status !== 'Approved')
+          <form method="post" action="{{ route('admin.shop-rentals.reject',$r->id) }}" class="inline">
+            @csrf
+            <button class="px-2 py-1 text-red-700">Reject</button>
+          </form>
+        @endif
       </div>
     </div>
 
-    {{-- CASH-ONLY Approve modal (mobile) --}}
     @if($r->status !== 'Approved' && empty($r->paymentMethod))
       <x-modal :name="'approve-'.$r->id" :title="'Approve Rental #'.$r->id">
         <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="space-y-3">
@@ -158,48 +188,25 @@
 <div class="hidden sm:block overflow-x-auto -mx-4 md:mx-0">
   <x-table class="table-fixed w-full">
     <x-slot:head>
-      <th class="px-3 py-2 w-10 text-center">
-        <input
-          type="checkbox"
-          x-data
-          @change="$el.closest('table').querySelectorAll('tbody input[type=checkbox]').forEach(c=>{ if(!c.disabled) c.checked=$el.checked })"
-          class="align-middle"
-        >
-      </th>
       <th class="px-3 py-2 text-left  w-32">Shop No</th>
-      <th class="px-3 py-2 text-left  w-44">Merchant</th>
       <th class="px-3 py-2 text-left  w-28">Month</th>
       <th class="px-3 py-2 text-right w-28">Bill</th>
       <th class="px-3 py-2 text-right w-28">Paid</th>
       <th class="px-3 py-2 text-center w-28 hidden lg:table-cell">Method</th>
       <th class="px-3 py-2 text-center w-28 hidden lg:table-cell">Receipt</th>
       <th class="px-3 py-2 text-center w-28">Status</th>
-      <th class="px-3 py-2 w-32"></th>
+      <th class="px-3 py-2 w-32">Action</th>
     </x-slot:head>
 
     @forelse($rows ?? [] as $r)
       <tr class="hover:bg-gray-50 align-middle">
-        <td class="px-3 py-2 w-10 text-center">
-          <input
-            type="checkbox"
-            name="ids[]"
-            value="{{ $r->id }}"
-            class="rounded"
-            @if($r->status === 'Approved') disabled @endif
-          >
-        </td>
-
         <td class="px-3 py-2 w-32">{{ $r->shopNumber }}</td>
-        <td class="px-3 py-2 w-44">{{ $r->merchant_name ?? '-' }}</td>
         <td class="px-3 py-2 w-28">{{ $r->month }}</td>
-
         <td class="px-3 py-2 text-right w-28">{{ number_format($r->billAmount,2) }}</td>
         <td class="px-3 py-2 text-right w-28">{{ number_format($r->paidAmount,2) }}</td>
-
         <td class="px-3 py-2 text-center w-28 hidden lg:table-cell uppercase">
           {{ $r->paymentMethod ?: '-' }}
         </td>
-
         <td class="px-3 py-2 text-center w-28 hidden lg:table-cell">
           @if($r->recipt)
             <a target="_blank" class="text-blue-600 hover:underline" href="{{ asset('storage/'.$r->recipt) }}">Open</a>
@@ -207,13 +214,10 @@
             <span class="text-gray-400">-</span>
           @endif
         </td>
-
         <td class="px-3 py-2 text-center w-28">
           <x-badge :status="$r->status"/>
         </td>
-
         <td class="px-3 py-2 w-32 text-right whitespace-nowrap">
-          {{-- Approve: CASH modal if method empty; else one-click --}}
           @if($r->status === 'Approved')
             <button class="text-green-700 opacity-50 cursor-not-allowed" disabled>Approve</button>
           @else
@@ -243,7 +247,6 @@
         </td>
       </tr>
 
-      {{-- CASH-ONLY Approve modal (desktop) --}}
       @if($r->status !== 'Approved' && empty($r->paymentMethod))
         <x-modal :name="'approve-'.$r->id" :title="'Approve Rental #'.$r->id">
           <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="space-y-3">
@@ -263,7 +266,7 @@
         </x-modal>
       @endif
     @empty
-      <tr><td class="px-3 py-6 text-gray-500 text-center" colspan="10">No data</td></tr>
+      <tr><td class="px-3 py-6 text-gray-500 text-center" colspan="8">No data</td></tr>
     @endforelse
   </x-table>
 </div>

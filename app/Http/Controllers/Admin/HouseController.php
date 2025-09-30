@@ -21,10 +21,10 @@ class HouseController extends Controller
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($w) use ($q) {
                     $w->where('houseNo', 'like', "%{$q}%")
-                      ->orWhere('HouseOwneId', 'like', "%{$q}%")
-                      ->orWhereHas('owner', function ($o) use ($q) {
-                          $o->where('name', 'like', "%{$q}%");
-                      });
+                        ->orWhere('HouseOwneId', 'like', "%{$q}%")
+                        ->orWhereHas('owner', function ($o) use ($q) {
+                            $o->where('name', 'like', "%{$q}%");
+                        });
                 });
             })
             ->orderBy('houseNo')
@@ -34,10 +34,10 @@ class HouseController extends Controller
                     ->orderByDesc('timestamp')
                     ->first();
 
-                $h->owner_name         = optional($h->owner)->name ?? 'Unassigned';
-                $h->latest_bill_month  = optional($latest)->month;
+                $h->owner_name = optional($h->owner)->name ?? 'Unassigned';
+                $h->latest_bill_month = optional($latest)->month;
                 $h->latest_bill_amount = optional($latest)->billAmount;
-                $h->latest_status      = optional($latest)->status ?? 'Pending';
+                $h->latest_status = optional($latest)->status ?? 'Pending';
 
                 return $h;
             });
@@ -64,15 +64,16 @@ class HouseController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'houseNo'         => ['required', 'string', 'max:50', Rule::unique('houses', 'houseNo')],
-            'HouseOwneId'     => [
-                'nullable', 'integer',
-                Rule::exists('users', 'id')->where(fn ($q) => $q->where('role', 'Houseowner')),
-                Rule::unique('houses', 'HouseOwneId')->where(fn ($q) => $q->whereNotNull('HouseOwneId')),
+            'houseNo' => ['required', 'string', 'max:50', Rule::unique('houses', 'houseNo')],
+            'HouseOwneId' => [
+                'nullable',
+                'integer',
+                Rule::exists('users', 'id')->where(fn($q) => $q->where('role', 'Houseowner')),
+                Rule::unique('houses', 'HouseOwneId')->where(fn($q) => $q->whereNotNull('HouseOwneId')),
             ],
-            'house_password'  => ['required_without:HouseOwneId', 'nullable', 'string', 'min:6'],
+            'house_password' => ['required_without:HouseOwneId', 'nullable', 'string', 'min:6'],
         ], [
-            'HouseOwneId.unique'            => 'This owner already has a house.',
+            'HouseOwneId.unique' => 'This owner already has a house.',
             'house_password.required_without' => 'Set a house password when no owner is selected.',
         ]);
 
@@ -86,7 +87,7 @@ class HouseController extends Controller
     /** Edit form */
     public function edit(string $houseNo)
     {
-        $house  = House::findOrFail($houseNo);
+        $house = House::findOrFail($houseNo);
         $owners = User::where('role', 'Houseowner')->orderBy('name')->get(['id', 'name', 'email']);
 
         return view('admin.houses.edit', compact('house', 'owners'));
@@ -102,29 +103,23 @@ class HouseController extends Controller
     {
         $house = House::findOrFail($houseNo);
 
-        $data = $request->validate([
-            'HouseOwneId'     => [
-                'nullable', 'integer',
-                Rule::exists('users', 'id')->where(fn ($q) => $q->where('role', 'Houseowner')),
-                Rule::unique('houses', 'HouseOwneId')
-                    ->ignore($house->houseNo, 'houseNo')
-                    ->where(fn ($q) => $q->whereNotNull('HouseOwneId')),
-            ],
-            'house_password'  => ['nullable', 'string', 'min:6'],
+        // Require password on update
+        $request->validate([
+            'house_password' => ['required', 'string', 'min:6'],
         ], [
-            'HouseOwneId.unique' => 'This owner already has a house.',
+            'house_password.required' => 'The password field is required when updating.',
         ]);
 
-        // Handle password update - store as plain text for admin visibility
-        // Note: house_password is stored as plain text for admin reference
-        if (empty($data['house_password'])) {
-            unset($data['house_password']); // don't overwrite with null
-        }
+        // Store as plain text for admin visibility (as per your note)
+        $house->house_password = $request->house_password;
+        $house->save();
 
-        $house->update($data);
-
-        return redirect()->route('admin.houses.index')->with('success', 'House updated.');
+        return redirect()
+            ->route('admin.houses.index')
+            ->with('success', 'House password updated.');
     }
+
+
 
     /** Delete (guard if bills exist) */
     public function destroy(string $houseNo)

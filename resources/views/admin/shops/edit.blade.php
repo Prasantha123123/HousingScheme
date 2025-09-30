@@ -2,14 +2,6 @@
 @section('content')
 <h1 class="text-xl font-semibold mb-3">Edit Shop: {{ $shop->shopNumber }}</h1>
 
-@if($errors->any())
-  <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-    @foreach($errors->all() as $error)
-      <div>{{ $error }}</div>
-    @endforeach
-  </div>
-@endif
-
 <form method="post" action="{{ route('admin.shops.update', $shop->shopNumber) }}" class="bg-white rounded-lg p-4 space-y-3">
   @csrf @method('PUT')
 
@@ -31,8 +23,13 @@
 
   <label class="block">
     <span class="text-sm text-gray-700">Shop Password</span>
-    <input type="text" name="shop_password" class="mt-1 w-full rounded border-gray-300"
-           placeholder="Enter new password" value="{{ old('shop_password') }}">
+    <input
+      type="text"
+      name="shop_password"
+      class="mt-1 w-full rounded border-gray-300 @error('shop_password') border-red-500 @enderror"
+      placeholder="Enter new password"
+      value="{{ old('shop_password') }}"
+    >
     @error('shop_password') <div class="text-sm text-red-600 mt-1">{{ $message }}</div> @enderror
   </label>
 

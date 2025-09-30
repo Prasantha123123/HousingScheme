@@ -21,6 +21,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Set application timezone
+        date_default_timezone_set('Asia/Colombo');
+        
         // Register custom authentication provider for plain text passwords
         Auth::provider('plain_text_eloquent', function ($app, array $config) {
             return new PlainTextUserProvider($app['hash'], $config['model']);
