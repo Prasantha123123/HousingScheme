@@ -21,23 +21,27 @@
     // MENUS BY ROLE (Houseowner: ONLY My Bills)
     $menus = [
       'Admin' => [
-        ['Dashboard',                 'admin.dashboard.index'],
-        ['Houses',                    'admin.houses.index'],
-        ['Income · House Charges',    'admin.house-bills.index'],
-        ['Shops',                     'admin.shops.index'],
-        ['Income · Shop Rentals',     'admin.shop-rentals.index'],
-        ['Income · Inventory Sales',  'admin.inventory-sales.index'],
-        ['Expenses · Payroll',        'admin.payroll.index'],
-        ['Expenses · Other',          'admin.expenses.index'],
-        ['Reports',                   'admin.reports.index'],
-        ['Settings',                  'admin.settings.edit'],
-        ['Users',                     'admin.users.index'],
+        ['Dashboard',                 'admin.dashboard.index', 'single', '📊'],
+        ['Houses',                    'admin.houses.index', 'single', '🏠'],
+        ['Shops',                     'admin.shops.index', 'single', '🏪'],
+        ['Income', '', 'parent', '💰', [
+          ['House Charges',           'admin.house-bills.index', '🏘️'],
+          ['Shop Rentals',            'admin.shop-rentals.index', '🏬'],
+          ['Inventory Sales',         'admin.inventory-sales.index', '📦'],
+        ]],
+        ['Expense', '', 'parent', '💸', [
+          ['Payroll',                 'admin.payroll.index', '👥'],
+          ['Other Expenses',          'admin.expenses.index', '💳'],
+        ]],
+        ['Reports',                   'admin.reports.index', 'single', '📈'],
+        ['Settings',                  'admin.settings.edit', 'single', '⚙️'],
+        ['Users',                     'admin.users.index', 'single', '👤'],
       ],
       'Houseowner' => [
-        ['My Bills',                  'customer.bills.index'],
+        ['My Bills',                  'customer.bills.index', 'single', '📄'],
       ],
       'Merchant' => [
-        ['My Shop Rentals',           'merchant.rentals.index'],
+        ['My Shop Rentals',           'merchant.rentals.index', 'single', '🏬'],
       ],
     ];
 
@@ -52,18 +56,62 @@
 
     <div class="p-4 font-bold text-lg">{{ $brand }}</div>
 
-    <nav class="flex-1 px-2 space-y-1">
-      @foreach($navItems as [$label, $routeName])
-        <a href="{{ route($routeName) }}"
-           class="block px-3 py-2 rounded-lg hover:bg-gray-100 {{ $active($routeName) }}">
-          {{ $label }}
-        </a>
+    <nav class="flex-1 px-2 space-y-1" x-data="{ 
+      openMenus: {
+        income: {{ request()->routeIs('admin.house-bills.*', 'admin.shop-rentals.*', 'admin.inventory-sales.*') ? 'true' : 'false' }},
+        expense: {{ request()->routeIs('admin.payroll.*', 'admin.expenses.*') ? 'true' : 'false' }}
+      }
+    }">
+      @foreach($navItems as $item)
+        @if(($item[2] ?? 'single') === 'parent')
+          {{-- Parent menu with children --}}
+          <div class="space-y-1">
+            <button 
+              @click="openMenus.{{ strtolower($item[0]) }} = !openMenus.{{ strtolower($item[0]) }}"
+              class="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-gray-100 text-left font-medium">
+              <span class="flex items-center">
+                <span class="mr-3 text-lg">{{ $item[3] ?? '📁' }}</span>
+                {{ $item[0] }}
+              </span>
+              <svg class="w-4 h-4 transition-transform" 
+                   :class="openMenus.{{ strtolower($item[0]) }} ? 'rotate-90' : ''"
+                   fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+              </svg>
+            </button>
+            
+            <div x-show="openMenus.{{ strtolower($item[0]) }}" 
+                 x-transition:enter="transition ease-out duration-200"
+                 x-transition:enter-start="opacity-0 transform scale-95"
+                 x-transition:enter-end="opacity-100 transform scale-100"
+                 x-transition:leave="transition ease-in duration-75"
+                 x-transition:leave-start="opacity-100 transform scale-100"
+                 x-transition:leave-end="opacity-0 transform scale-95"
+                 class="ml-4 space-y-1">
+              @foreach($item[4] as $subItem)
+                <a href="{{ route($subItem[1]) }}"
+                   class="flex items-center px-3 py-2 rounded-lg hover:bg-gray-100 text-sm {{ $active($subItem[1]) }}">
+                  <span class="mr-3 text-base">{{ $subItem[2] ?? '•' }}</span>
+                  {{ $subItem[0] }}
+                </a>
+              @endforeach
+            </div>
+          </div>
+        @else
+          {{-- Single menu item --}}
+          <a href="{{ route($item[1]) }}"
+             class="flex items-center px-3 py-2 rounded-lg hover:bg-gray-100 {{ $active($item[1]) }}">
+            <span class="mr-3 text-lg">{{ $item[3] ?? '📄' }}</span>
+            {{ $item[0] }}
+          </a>
+        @endif
       @endforeach
 
       {{-- Logout (shown for all roles) --}}
       <form method="POST" action="{{ route('logout') }}" class="mt-4 border-t pt-4">
         @csrf
-        <button type="submit" class="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100">
+        <button type="submit" class="w-full flex items-center text-left px-3 py-2 rounded-lg hover:bg-gray-100">
+          <span class="mr-3 text-lg">🚪</span>
           Logout
         </button>
       </form>
