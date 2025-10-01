@@ -20,6 +20,7 @@ use Carbon\Carbon;
  */
 class UnifiedBillingService
 {
+    
     /**
      * Process payment for house rental with unified allocation logic
      */
@@ -50,6 +51,7 @@ class UnifiedBillingService
 
             // Allocate payment oldest-first
             $remainingPayment = $effectivePayment;
+            $paymentDistribution = []; // Track where customer payments actually go for display
             
             foreach ($unpaidBills as $bill) {
                 if ($remainingPayment <= 0) break;
@@ -58,6 +60,9 @@ class UnifiedBillingService
                 if ($billOutstanding <= 0) continue;
                 
                 $allocation = min($remainingPayment, $billOutstanding);
+                
+                // Track payment distribution for display purposes
+                $paymentDistribution[$bill->month] = ($paymentDistribution[$bill->month] ?? 0) + $allocation;
                 
                 // Update bill with allocated amount
                 $bill->paidAmount = round((float)$bill->paidAmount + $allocation, 2);
@@ -78,6 +83,31 @@ class UnifiedBillingService
                 
                 $bill->save();
                 $remainingPayment -= $allocation;
+            }
+
+            // Update original_payment_amount to show customer payment amounts per bill
+            // This is for display purposes - showing what customer paid for each month
+            if (isset($paymentDistribution[$collectionMonth])) {
+                // Payment was made in a month that has a bill
+                $targetBill = $unpaidBills->where('month', $collectionMonth)->first();
+                if ($targetBill) {
+                    $targetBill->original_payment_amount = ($targetBill->original_payment_amount ?? 0) + $paymentAmount;
+                    $targetBill->save();
+                }
+            } else {
+                // Distribute the payment amount proportionally for display
+                $totalAllocated = array_sum($paymentDistribution);
+                if ($totalAllocated > 0) {
+                    foreach ($paymentDistribution as $month => $allocation) {
+                        $billToUpdate = $unpaidBills->where('month', $month)->first();
+                        if ($billToUpdate) {
+                            // Show proportional amount of customer payment for this bill
+                            $proportionalPayment = ($allocation / $totalAllocated) * $paymentAmount;
+                            $billToUpdate->original_payment_amount = ($billToUpdate->original_payment_amount ?? 0) + $proportionalPayment;
+                            $billToUpdate->save();
+                        }
+                    }
+                }
             }
 
             // For the bill that matches the collection month, track the monthly collection
@@ -137,6 +167,7 @@ class UnifiedBillingService
 
             // Allocate payment oldest-first
             $remainingPayment = $effectivePayment;
+            $paymentDistribution = []; // Track where customer payments actually go for display
             
             foreach ($unpaidBills as $bill) {
                 if ($remainingPayment <= 0) break;
@@ -145,6 +176,9 @@ class UnifiedBillingService
                 if ($billOutstanding <= 0) continue;
                 
                 $allocation = min($remainingPayment, $billOutstanding);
+                
+                // Track payment distribution for display purposes
+                $paymentDistribution[$bill->month] = ($paymentDistribution[$bill->month] ?? 0) + $allocation;
                 
                 // Update bill with allocated amount
                 $bill->paidAmount = round((float)$bill->paidAmount + $allocation, 2);
@@ -165,6 +199,31 @@ class UnifiedBillingService
                 
                 $bill->save();
                 $remainingPayment -= $allocation;
+            }
+
+            // Update original_payment_amount to show customer payment amounts per bill
+            // This is for display purposes - showing what customer paid for each month
+            if (isset($paymentDistribution[$collectionMonth])) {
+                // Payment was made in a month that has a bill
+                $targetBill = $unpaidBills->where('month', $collectionMonth)->first();
+                if ($targetBill) {
+                    $targetBill->original_payment_amount = ($targetBill->original_payment_amount ?? 0) + $paymentAmount;
+                    $targetBill->save();
+                }
+            } else {
+                // Distribute the payment amount proportionally for display
+                $totalAllocated = array_sum($paymentDistribution);
+                if ($totalAllocated > 0) {
+                    foreach ($paymentDistribution as $month => $allocation) {
+                        $billToUpdate = $unpaidBills->where('month', $month)->first();
+                        if ($billToUpdate) {
+                            // Show proportional amount of customer payment for this bill
+                            $proportionalPayment = ($allocation / $totalAllocated) * $paymentAmount;
+                            $billToUpdate->original_payment_amount = ($billToUpdate->original_payment_amount ?? 0) + $proportionalPayment;
+                            $billToUpdate->save();
+                        }
+                    }
+                }
             }
 
             // For the bill that matches the collection month, track the monthly collection

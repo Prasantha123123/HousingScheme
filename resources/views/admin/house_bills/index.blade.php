@@ -224,7 +224,7 @@
         <td class="px-3 py-2 hidden md:table-cell">{{ $b->openingReadingUnit }} → {{ $b->readingUnit }}</td>
         <td class="px-3 py-2 text-right hidden md:table-cell">{{ $usage }}</td>
         <td class="px-3 py-2 text-right">Rs {{ number_format($b->billAmount,2) }}</td>
-        <td class="px-3 py-2 text-right">Rs {{ number_format($b->paidAmount,2) }}</td>
+        <td class="px-3 py-2 text-right">Rs {{ number_format($b->original_payment_amount ?: $b->paidAmount, 2) }}</td>
         <td class="px-3 py-2 text-right">Rs {{ number_format($balance,2) }}</td>
         <td class="px-3 py-2 hidden lg:table-cell uppercase">{{ $b->paymentMethod ?: '-' }}</td>
         <td class="px-3 py-2 hidden lg:table-cell">

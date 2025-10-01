@@ -12,7 +12,7 @@ class ShopRental extends Model
 
     protected $fillable = [
         'shopNumber','billAmount','month','paidAmount','monthly_collection_amount','collection_month','paymentMethod',
-        'recipt','status','timestamp','approved_at','customer_paid_at'
+        'recipt','status','timestamp','approved_at','customer_paid_at','original_payment_amount'
     ];
 
     protected $casts = [

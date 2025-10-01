@@ -13,6 +13,28 @@
   </div>
 </form>
 
+{{-- AR Summary integrated --}}
+<div class="bg-white rounded-lg p-4 mb-4 border border-gray-200">
+  <h3 class="text-lg font-semibold text-gray-800 mb-3">Collections Analysis</h3>
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="text-center">
+      <div class="text-sm text-gray-600">Expected Collections</div>
+      <div class="text-lg font-bold text-gray-800">Rs {{ number_format($billedRental ?? 0, 2) }}</div>
+      <div class="text-xs text-gray-500">Current month bills</div>
+    </div>
+    <div class="text-center">
+      <div class="text-sm text-gray-600">Actual Collections</div>
+      <div class="text-lg font-bold text-green-600">Rs {{ number_format(($houseCollected ?? 0) + ($shopCollected ?? 0), 2) }}</div>
+      <div class="text-xs text-gray-500">Total received</div>
+    </div>
+    <div class="text-center">
+      <div class="text-sm text-gray-600">Previous Month Carry Forward</div>
+      <div class="text-lg font-bold text-orange-600">Rs {{ number_format(max(0, (($houseCollected ?? 0) + ($shopCollected ?? 0)) - ($billedRental ?? 0)), 2) }}</div>
+      <div class="text-xs text-gray-500">Pending amounts collected</div>
+    </div>
+  </div>
+</div>
+
 {{-- Accrual & Cash overview --}}
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
   <x-stat title="Billed Rentals ({{ $month }})" :value="number_format($billedRental ?? 0, 2)"/>

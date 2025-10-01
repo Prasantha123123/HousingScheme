@@ -158,13 +158,16 @@ class HouseBillApproveController extends Controller
 
             $bill->paymentMethod = $data['paymentMethod'];
 
+            // Respect original payment time when customer paid (preserve month attribution)
+            $paymentDate = $bill->customer_paid_at ?: now();
+
             // Use unified billing service to process the NEW payment amount
             $this->billingService->processHousePayment(
                 $bill, 
                 $newPaymentAmount, 
                 $data['paymentMethod'], 
                 $receiptPath,
-                now()
+                $paymentDate
             );
         });
 

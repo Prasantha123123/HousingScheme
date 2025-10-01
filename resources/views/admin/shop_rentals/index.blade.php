@@ -117,7 +117,7 @@
         </div>
         <div class="text-right">
           <div class="text-gray-500">Paid</div>
-          <div class="font-medium">{{ number_format($r->paidAmount,2,'.', ',') }}</div>
+          <div class="font-medium">{{ number_format($r->original_payment_amount ?: $r->paidAmount, 2, '.', ',') }}</div>
         </div>
         <div>
           <div class="text-gray-500">Balance</div>
@@ -246,7 +246,7 @@
         <td class="px-3 py-2 w-32">{{ $r->shopNumber }}</td>
         <td class="px-3 py-2 w-28">{{ $r->month }}</td>
         <td class="px-3 py-2 text-right w-28">{{ number_format($r->billAmount,2,'.', ',') }}</td>
-        <td class="px-3 py-2 text-right w-28">{{ number_format($r->paidAmount,2,'.', ',') }}</td>
+        <td class="px-3 py-2 text-right w-28">{{ number_format($r->original_payment_amount ?: $r->paidAmount, 2, '.', ',') }}</td>
         <td class="px-3 py-2 text-right w-28 {{ $balance > 0 ? 'text-red-600 font-medium' : 'text-green-600' }}">{{ number_format($balance,2,'.', ',') }}</td>
         <td class="px-3 py-2 text-center w-28 hidden lg:table-cell uppercase">
           {{ $r->paymentMethod ?: '-' }}

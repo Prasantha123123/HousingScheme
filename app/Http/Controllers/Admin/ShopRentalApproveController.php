@@ -17,6 +17,7 @@ class ShopRentalApproveController extends Controller
     {
         $this->billingService = $billingService;
     }
+
     public function approve(Request $request, int $id)
     {
         // ---------- BULK ----------
@@ -31,13 +32,12 @@ class ShopRentalApproveController extends Controller
             $skipped   = 0;
 
             DB::transaction(function () use ($data, &$processed, &$skipped) {
-                // Lock all selected rows
                 $rows = ShopRental::whereIn('id', $data['ids'])
                     ->lockForUpdate()
                     ->get()
                     ->keyBy('id');
 
-                // Determine the latest NOT-approved row per shop
+                // latest open row per shop
                 $latestPerShop = [];
                 foreach ($rows as $row) {
                     $latest = ShopRental::where('shopNumber', $row->shopNumber)
@@ -45,49 +45,39 @@ class ShopRentalApproveController extends Controller
                         ->orderBy('month', 'desc')
                         ->lockForUpdate()
                         ->first();
-
-                    if ($latest) {
-                        $latestPerShop[$row->shopNumber] = $latest->id;
-                    }
+                    if ($latest) $latestPerShop[$row->shopNumber] = $latest->id;
                 }
 
                 foreach ($rows as $row) {
-                    // Only process if this row IS the latest outstanding for that shop
                     if (($latestPerShop[$row->shopNumber] ?? null) !== $row->id) {
-                        $skipped++;
-                        continue;
+                        $skipped++; continue;
                     }
 
-                    // Calculate maximum payable amount (prevents overpayment)
                     $maxPayable = $this->billingService->getMaxPayableAmount('shop', $row->shopNumber, $row->month);
-                    
                     $newPaymentAmount = 0;
-                    
-                    // If no amount recorded yet and bulk is CASH, cap to max payable
+
                     if ((float)$row->paidAmount <= 0 && $data['paymentMethod'] === 'cash') {
                         $targetAmount = min((float)$row->billAmount, $maxPayable);
                         $newPaymentAmount = max(0, $targetAmount - (float)$row->paidAmount);
                     } else {
-                        // For existing partial payments, we don't add more in bulk mode
-                        $skipped++;
-                        continue;
+                        $skipped++; continue;
                     }
 
-                    if ($newPaymentAmount <= 0) {
-                        $skipped++;
-                        continue;
-                    }
+                    if ($newPaymentAmount <= 0) { $skipped++; continue; }
 
                     $row->paymentMethod = $data['paymentMethod'];
 
-                    // Use unified billing service to process the NEW payment amount (no receipt for bulk)
+                    // ✅ Use the original time customer paid (if any)
+                    $paymentDate = $row->customer_paid_at ?: now();
+
                     $this->billingService->processShopPayment(
-                        $row, 
-                        $newPaymentAmount, 
-                        $data['paymentMethod'], 
+                        $row,
+                        $newPaymentAmount,
+                        $data['paymentMethod'],
                         null,
-                        now()
+                        $paymentDate
                     );
+
                     $processed++;
                 }
             });
@@ -107,7 +97,6 @@ class ShopRentalApproveController extends Controller
             /** @var ShopRental $rental */
             $rental = ShopRental::lockForUpdate()->findOrFail($id);
 
-            // Must be the latest outstanding rental for this shop
             $latestOpen = ShopRental::where('shopNumber', $rental->shopNumber)
                 ->where('status', '!=', 'Approved')
                 ->orderBy('month', 'desc')
@@ -123,31 +112,21 @@ class ShopRentalApproveController extends Controller
                 $receiptPath = $request->file('recipt')->store('receipts', 'public');
             }
 
-            // Calculate maximum payable amount (prevents overpayment)
             $maxPayable = $this->billingService->getMaxPayableAmount('shop', $rental->shopNumber, $rental->month);
-            
             $newPaymentAmount = 0;
 
-            // Use explicit amount if provided; else auto-fill based on payment method and current state
             if (array_key_exists('paidAmount', $data) && $data['paidAmount'] !== null) {
-                // For subsequent partial payments, this is the NEW payment amount to add
                 $newPaymentAmount = (float)$data['paidAmount'];
-                
-                // Check if adding this would exceed max payable
                 $currentPaid = (float)$rental->paidAmount;
                 $maxNewPayment = max(0, $maxPayable - $currentPaid);
                 $newPaymentAmount = min($newPaymentAmount, $maxNewPayment);
-                
+
             } elseif ((float)$rental->paidAmount > 0) {
-                // Rental already has payment amount (from customer payment) - process the existing amount
                 $newPaymentAmount = (float)$rental->paidAmount;
-                // Reset paidAmount to 0 so the service can properly allocate it
-                $rental->paidAmount = 0;
+                $rental->paidAmount = 0; // let service allocate cleanly
                 $rental->save();
-                
+
             } elseif ((float)$rental->paidAmount < (float)$rental->billAmount && $rental->status !== 'PartPayment') {
-                // Auto-fill for first-time payments (any method), not subsequent partial payments
-                // Cap to max payable amount to prevent overpayment
                 $targetAmount = min((float)$rental->billAmount, $maxPayable);
                 $newPaymentAmount = max(0, $targetAmount - (float)$rental->paidAmount);
             }
@@ -158,13 +137,15 @@ class ShopRentalApproveController extends Controller
 
             $rental->paymentMethod = $data['paymentMethod'];
 
-            // Use unified billing service to process the NEW payment amount
+            // ✅ Respect original payment time (so Sep stays Sep, Oct stays Oct)
+            $paymentDate = $rental->customer_paid_at ?: now();
+
             $this->billingService->processShopPayment(
-                $rental, 
-                $newPaymentAmount, 
-                $data['paymentMethod'], 
+                $rental,
+                $newPaymentAmount,
+                $data['paymentMethod'],
                 $receiptPath,
-                now()
+                $paymentDate
             );
         });
 
