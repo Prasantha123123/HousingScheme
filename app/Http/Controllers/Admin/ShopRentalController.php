@@ -5,12 +5,20 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Shop;
 use App\Models\ShopRental;
+use App\Services\UnifiedBillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class ShopRentalController extends Controller
 {
+    private UnifiedBillingService $billingService;
+
+    public function __construct(UnifiedBillingService $billingService)
+    {
+        $this->billingService = $billingService;
+    }
+
     public function index(Request $r)
     {
         $rows = ShopRental::with(['shop.merchant:id,name'])
@@ -38,6 +46,8 @@ class ShopRentalController extends Controller
             ->through(function (ShopRental $rental) {
                 // expose merchant name directly to the blade
                 $rental->merchant_name = optional(optional($rental->shop)->merchant)->name;
+                // Calculate maxPayable for each rental
+                $rental->maxPayable = $this->billingService->getMaxPayableAmount('shop', $rental->shopNumber, $rental->month);
                 return $rental;
             });
 

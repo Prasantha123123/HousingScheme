@@ -5,23 +5,38 @@ namespace App\Http\Controllers\Merchant;
 use App\Http\Controllers\Controller;
 use App\Models\Shop;
 use App\Models\ShopRental;
+use App\Services\UnifiedBillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class RentalPayController extends Controller
 {
+    private UnifiedBillingService $billingService;
+
+    public function __construct(UnifiedBillingService $billingService)
+    {
+        $this->billingService = $billingService;
+    }
+
     public function transfer(Request $r, $id)
     {
-        $data = $r->validate([
-            'amount' => ['required','numeric','min:0.01'],
-            'reference'=>'required|string|max:100',
-            'recipt'=>'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
-        ]);
-        
         $latest = ShopRental::findOrFail($id);
         
         // Verify access permissions
         $this->verifyShopAccess($latest->shopNumber);
+        
+        // Calculate outstanding amount for validation using unified service
+        $maxPayable = $this->billingService->getMaxPayableAmount('shop', $latest->shopNumber, $latest->month);
+        $alreadyPaid = (float)$latest->paidAmount;
+        $outstanding = max(0, $maxPayable - $alreadyPaid);
+        
+        $data = $r->validate([
+            'amount' => ['required','numeric','min:0.01', 'max:' . $outstanding],
+            'reference'=>'required|string|max:100',
+            'recipt'=>'required|file|mimes:pdf,jpg,jpeg,png|max:5120',
+        ], [
+            'amount.max' => 'Payment amount cannot exceed the outstanding balance of Rs ' . number_format($outstanding, 2),
+        ]);
         
         $receiptPath = $r->file('recipt')->store('receipts','public');
         
@@ -30,14 +45,21 @@ class RentalPayController extends Controller
 
     public function card(Request $r, $id)
     {
-        $data = $r->validate([
-            'amount' => ['required','numeric','min:0.01'],
-        ]);
-        
         $latest = ShopRental::findOrFail($id);
         
         // Verify access permissions
         $this->verifyShopAccess($latest->shopNumber);
+        
+        // Calculate outstanding amount for validation using unified service
+        $maxPayable = $this->billingService->getMaxPayableAmount('shop', $latest->shopNumber, $latest->month);
+        $alreadyPaid = (float)$latest->paidAmount;
+        $outstanding = max(0, $maxPayable - $alreadyPaid);
+        
+        $data = $r->validate([
+            'amount' => ['required','numeric','min:0.01', 'max:' . $outstanding],
+        ], [
+            'amount.max' => 'Payment amount cannot exceed the outstanding balance of Rs ' . number_format($outstanding, 2),
+        ]);
         
         return $this->payLatestWithCarry($latest, 'card', null, (float)$data['amount']);
     }
@@ -67,7 +89,7 @@ class RentalPayController extends Controller
     /**
      * Record a payment on the latest month that covers (part of) carry + current.
      * Earlier months stay unchanged; admin approval will reconcile statuses.
-     * Row becomes Pending until approved.
+     * Row becomes InProgress until approved.
      */
     protected function payLatestWithCarry(ShopRental $latest, string $method, ?string $receiptPath, float $amount)
     {
@@ -81,60 +103,20 @@ class RentalPayController extends Controller
             return back()->withErrors(['amount' => 'You can only pay the latest outstanding bill.']);
         }
 
-        // Calculate carry from previous unpaid months
-        $carry = ShopRental::where('shopNumber', $latest->shopNumber)
-            ->where('month', '<', $latest->month)
-            ->get()
-            ->sum(fn (ShopRental $r) => max(0, (float)$r->billAmount - (float)$r->paidAmount));
+        try {
+            // Use unified billing service to record customer payment
+            $this->billingService->recordCustomerPayment(
+                'shop', 
+                $latest->id, 
+                $amount, 
+                $method, 
+                $receiptPath, 
+                now()
+            );
 
-        $totalDue = (float)$latest->billAmount + $carry;
-        $alreadyPaid = (float)$latest->paidAmount;
-        $outstanding = max(0, $totalDue - $alreadyPaid);
-
-        if ($amount <= 0) {
-            return back()->withErrors(['amount' => 'Payment amount must be greater than zero.']);
+            return back()->with('success', 'Payment recorded and is in progress. Admin will approve it shortly.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => 'Payment failed: ' . $e->getMessage()]);
         }
-
-        if ($outstanding <= 0) {
-            return back()->withErrors(['amount' => 'Nothing outstanding to pay.']);
-        }
-
-        // Determine payment status based on amount
-        $newPaidAmount = $alreadyPaid + $amount;
-        $newStatus = 'Pending'; // Default to pending until admin approval
-        
-        if ($newPaidAmount >= $totalDue) {
-            // Full payment or overpayment
-            if ($newPaidAmount > $totalDue) {
-                // Overpayment - limit to total due and set as ExtraPayment status
-                $newPaidAmount = $alreadyPaid + $outstanding; // Only pay what's due
-                $newStatus = 'ExtraPayment'; // Admin will handle excess
-            } else {
-                // Exact payment
-                $newStatus = 'Pending';
-            }
-        } else {
-            // Partial payment
-            $newStatus = 'PartPayment';
-        }
-
-        DB::transaction(function () use ($latest, $method, $receiptPath, $newPaidAmount, $newStatus, $alreadyPaid) {
-            $latest->paymentMethod = $method;
-            if ($receiptPath) {
-                $latest->recipt = $receiptPath;
-            }
-            $latest->paidAmount = $newPaidAmount;
-            $latest->status = $newStatus;
-            $latest->customer_paid_at = now();
-            $latest->save();
-        });
-
-        $message = match($newStatus) {
-            'PartPayment' => 'Partial payment recorded. You can make additional payments until fully paid.',
-            'ExtraPayment' => 'Full payment recorded with overpayment. Admin will handle the excess amount.',
-            default => 'Payment recorded. Admin will approve it shortly.'
-        };
-
-        return back()->with('success', $message);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\House;
 
 use App\Http\Controllers\Controller;
 use App\Models\HouseRental;
+use App\Services\UnifiedBillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -16,6 +17,13 @@ use Illuminate\Support\Facades\Log;
  */
 class BillPayController extends Controller
 {
+    private UnifiedBillingService $billingService;
+
+    public function __construct(UnifiedBillingService $billingService)
+    {
+        $this->billingService = $billingService;
+    }
+
     /** Bank transfer (receipt upload) – record payment on latest bill ONLY incl. carry */
     public function transfer(Request $request, int $id)
     {
@@ -85,20 +93,29 @@ class BillPayController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($latest, $method, $receiptPath, $amount) {
-                $currentPaidAmount = (float)$latest->paidAmount;
-                $newPaidAmount = $currentPaidAmount + $amount;
-                
-                $latest->update([
-                    'paidAmount'        => $newPaidAmount,
-                    'paymentMethod'     => $method,
-                    'recipt'            => $receiptPath,
-                    'status'            => 'InProgress',
-                    'customer_paid_at'  => now(),
-                ]);
-            });
+            // Calculate maximum payable amount (prevents overpayment)
+            $maxPayable = $this->billingService->getMaxPayableAmount('house', $latest->houseNo, $latest->month);
+            $alreadyPaid = (float)$latest->paidAmount;
+            $outstanding = max(0, $maxPayable - $alreadyPaid);
+            
+            // Cap payment to outstanding amount
+            $toApply = min($amount, $outstanding);
 
-            return back()->with('success', "Payment of $amount recorded successfully. Awaiting admin approval.");
+            if ($toApply <= 0) {
+                return back()->withErrors(['error' => 'Nothing outstanding to pay.']);
+            }
+
+            // Use unified billing service to record customer payment
+            $this->billingService->recordCustomerPayment(
+                'house', 
+                $latest->id, 
+                $toApply, 
+                $method, 
+                $receiptPath, 
+                now()
+            );
+
+            return back()->with('success', "Payment of $toApply recorded successfully. Awaiting admin approval.");
         } catch (\Exception $e) {
             Log::error('Payment failed for house ' . $latest->houseNo . ': ' . $e->getMessage());
             return back()->withErrors(['error' => 'Payment failed: ' . $e->getMessage()]);

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Shop;
 
 use App\Http\Controllers\Controller;
 use App\Models\ShopRental;
+use App\Services\UnifiedBillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -16,6 +17,13 @@ use Illuminate\Support\Facades\Log;
  */
 class RentalPayController extends Controller
 {
+    private UnifiedBillingService $billingService;
+
+    public function __construct(UnifiedBillingService $billingService)
+    {
+        $this->billingService = $billingService;
+    }
+
     /** Bank transfer (receipt upload) – record payment on latest rental ONLY incl. carry */
     public function transfer(Request $request, int $id)
     {
@@ -84,33 +92,28 @@ class RentalPayController extends Controller
             return back()->withErrors(['amount' => 'You can only pay the latest outstanding rental.']);
         }
 
-        // Calculate carry from previous unpaid months
-        $carry = ShopRental::where('shopNumber', $latest->shopNumber)
-            ->where('month', '<', $latest->month)
-            ->get()
-            ->sum(fn (ShopRental $r) => max(0, (float)$r->billAmount - (float)$r->paidAmount));
-
-        $totalDue = (float)$latest->billAmount + $carry;
-        $alreadyPaid = (float)$latest->paidAmount;
-        $outstanding = max(0, $totalDue - $alreadyPaid);
-        $toApply = min($amount, $outstanding); // prevent accidental overpay
-
-        if ($toApply <= 0) {
-            return back()->withErrors(['amount' => 'Nothing outstanding to pay.']);
-        }
-
         try {
-            DB::transaction(function () use ($latest, $method, $receiptPath, $toApply) {
-                $latest->paymentMethod = $method;
-                if ($receiptPath) {
-                    $latest->recipt = $receiptPath;
-                }
-                // Add this payment to whatever was already paid (supports multiple part-payments)
-                $latest->paidAmount = (float)$latest->paidAmount + $toApply;
-                $latest->status = 'Pending';   // waiting for admin approval
-                $latest->customer_paid_at = now();
-                $latest->save();
-            });
+            // Calculate maximum payable amount (prevents overpayment)
+            $maxPayable = $this->billingService->getMaxPayableAmount('shop', $latest->shopNumber, $latest->month);
+            $alreadyPaid = (float)$latest->paidAmount;
+            $outstanding = max(0, $maxPayable - $alreadyPaid);
+            
+            // Cap payment to outstanding amount
+            $toApply = min($amount, $outstanding);
+
+            if ($toApply <= 0) {
+                return back()->withErrors(['amount' => 'Nothing outstanding to pay.']);
+            }
+
+            // Use unified billing service to record customer payment
+            $this->billingService->recordCustomerPayment(
+                'shop', 
+                $latest->id, 
+                $toApply, 
+                $method, 
+                $receiptPath, 
+                now()
+            );
 
             return back()->with('success', 'Payment recorded. Admin will approve it shortly.');
         } catch (\Exception $e) {

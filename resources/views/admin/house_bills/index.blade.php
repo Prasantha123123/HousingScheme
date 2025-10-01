@@ -140,27 +140,42 @@
     </div>
 
     @if($b->status !== 'Approved' && (empty($b->paymentMethod) || $b->status === 'PartPayment'))
+      @php
+        $maxPayable = $b->maxPayable ?? 0;
+      @endphp
       <x-modal :name="'approve-'.$b->id" :title="'Approve Bill #'.$b->id">
-        <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="space-y-3">
-          @csrf
-          <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod ?: 'cash' }}">
-          <p class="text-sm text-gray-600">
-            Recording a <span class="font-medium">{{ $b->paymentMethod ?: 'cash' }}</span> payment.
-            @if($b->status === 'PartPayment')
-              <br><span class="text-orange-600">Additional payment for partial bill.</span>
-            @endif
-          </p>
-          <label class="block">
-            <span class="text-sm">Paid Amount</span>
-            <input type="number" name="paidAmount" step="0.01" min="0"
-                   value="{{ old('paidAmount', '') }}"
-                   placeholder="Enter additional amount"
-                   class="mt-1 w-full rounded border-gray-300" required>
-          </label>
-          <div class="text-right">
-            <button class="px-3 py-2 bg-green-600 text-white rounded-lg">Approve</button>
-          </div>
-        </form>
+        <div x-data="{ paidAmount: '', maxAmount: {{ $maxPayable }} }">
+          <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="space-y-3">
+            @csrf
+            <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod ?: 'cash' }}">
+            <p class="text-sm text-gray-600">
+              Recording a <span class="font-medium">{{ $b->paymentMethod ?: 'cash' }}</span> payment.
+              @if($b->status === 'PartPayment')
+                <br><span class="text-orange-600">Additional payment for partial bill.</span>
+              @endif
+              <br><span class="text-sm text-gray-500">Maximum payable amount: Rs {{ number_format($maxPayable, 2) }}</span>
+            </p>
+            <label class="block">
+              <span class="text-sm">Paid Amount</span>
+              <input type="number" name="paidAmount" step="0.01" min="0" max="{{ $maxPayable }}"
+                     x-model="paidAmount"
+                     value="{{ old('paidAmount', '') }}"
+                     placeholder="Enter amount (max: {{ number_format($maxPayable, 2) }})"
+                     class="mt-1 w-full rounded border-gray-300" required>
+              <div x-show="parseFloat(paidAmount) > maxAmount" class="text-red-600 text-xs mt-1">
+                Payment amount cannot exceed the maximum payable amount of Rs {{ number_format($maxPayable, 2) }}
+              </div>
+            </label>
+            <div class="text-right">
+              <button type="submit" 
+                      :disabled="parseFloat(paidAmount) > maxAmount || !paidAmount"
+                      :class="{ 'opacity-50 cursor-not-allowed': parseFloat(paidAmount) > maxAmount || !paidAmount }"
+                      class="px-3 py-2 bg-green-600 text-white rounded-lg">
+                Approve
+              </button>
+            </div>
+          </form>
+        </div>
       </x-modal>
     @endif
 
@@ -208,9 +223,9 @@
         <td class="px-3 py-2">{{ $b->month }}</td>
         <td class="px-3 py-2 hidden md:table-cell">{{ $b->openingReadingUnit }} → {{ $b->readingUnit }}</td>
         <td class="px-3 py-2 text-right hidden md:table-cell">{{ $usage }}</td>
-        <td class="px-3 py-2 text-right">{{ number_format($b->billAmount,2) }}</td>
-        <td class="px-3 py-2 text-right">{{ number_format($b->paidAmount,2) }}</td>
-        <td class="px-3 py-2 text-right">{{ number_format($balance,2) }}</td>
+        <td class="px-3 py-2 text-right">Rs {{ number_format($b->billAmount,2) }}</td>
+        <td class="px-3 py-2 text-right">Rs {{ number_format($b->paidAmount,2) }}</td>
+        <td class="px-3 py-2 text-right">Rs {{ number_format($balance,2) }}</td>
         <td class="px-3 py-2 hidden lg:table-cell uppercase">{{ $b->paymentMethod ?: '-' }}</td>
         <td class="px-3 py-2 hidden lg:table-cell">
           @if($b->recipt)
@@ -244,27 +259,42 @@
       </tr>
 
       @if($b->status !== 'Approved' && (empty($b->paymentMethod) || $b->status === 'PartPayment'))
+        @php
+          $maxPayable = $b->maxPayable ?? 0;
+        @endphp
         <x-modal :name="'approve-'.$b->id" :title="'Approve Bill #'.$b->id">
-          <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="space-y-3">
-            @csrf
-            <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod ?: 'cash' }}">
-            <p class="text-sm text-gray-600">
-              Recording a <span class="font-medium">{{ $b->paymentMethod ?: 'cash' }}</span> payment.
-              @if($b->status === 'PartPayment')
-                <br><span class="text-orange-600">Additional payment for partial bill.</span>
-              @endif
-            </p>
-            <label class="block">
-              <span class="text-sm">Paid Amount</span>
-              <input type="number" name="paidAmount" step="0.01" min="0"
-                     value="{{ old('paidAmount', '') }}"
-                     placeholder="Enter additional amount"
-                     class="mt-1 w-full rounded border-gray-300" required>
-            </label>
-            <div class="text-right">
-              <button class="px-3 py-2 bg-green-600 text-white rounded-lg">Approve</button>
-            </div>
-          </form>
+          <div x-data="{ paidAmount: '', maxAmount: {{ $maxPayable }} }">
+            <form method="post" action="{{ route('admin.house-bills.approve',$b->id) }}" class="space-y-3">
+              @csrf
+              <input type="hidden" name="paymentMethod" value="{{ $b->paymentMethod ?: 'cash' }}">
+              <p class="text-sm text-gray-600">
+                Recording a <span class="font-medium">{{ $b->paymentMethod ?: 'cash' }}</span> payment.
+                @if($b->status === 'PartPayment')
+                  <br><span class="text-orange-600">Additional payment for partial bill.</span>
+                @endif
+                <br><span class="text-sm text-gray-500">Maximum payable amount: Rs {{ number_format($maxPayable, 2) }}</span>
+              </p>
+              <label class="block">
+                <span class="text-sm">Paid Amount</span>
+                <input type="number" name="paidAmount" step="0.01" min="0" max="{{ $maxPayable }}"
+                       x-model="paidAmount"
+                       value="{{ old('paidAmount', '') }}"
+                       placeholder="Enter amount (max: {{ number_format($maxPayable, 2) }})"
+                       class="mt-1 w-full rounded border-gray-300" required>
+                <div x-show="parseFloat(paidAmount) > maxAmount" class="text-red-600 text-xs mt-1">
+                  Payment amount cannot exceed the maximum payable amount of Rs {{ number_format($maxPayable, 2) }}
+                </div>
+              </label>
+              <div class="text-right">
+                <button type="submit" 
+                        :disabled="parseFloat(paidAmount) > maxAmount || !paidAmount"
+                        :class="{ 'opacity-50 cursor-not-allowed': parseFloat(paidAmount) > maxAmount || !paidAmount }"
+                        class="px-3 py-2 bg-green-600 text-white rounded-lg">
+                  Approve
+                </button>
+              </div>
+            </form>
+          </div>
         </x-modal>
       @endif
 

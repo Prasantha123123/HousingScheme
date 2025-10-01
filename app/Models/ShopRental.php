@@ -11,7 +11,7 @@ class ShopRental extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'shopNumber','billAmount','month','paidAmount','paymentMethod',
+        'shopNumber','billAmount','month','paidAmount','monthly_collection_amount','collection_month','paymentMethod',
         'recipt','status','timestamp','approved_at','customer_paid_at'
     ];
 

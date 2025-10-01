@@ -7,11 +7,19 @@ use App\Models\House;
 use App\Models\HouseRental;
 use App\Models\Setting;
 use App\Models\WaterReading;
+use App\Services\UnifiedBillingService;
 use Illuminate\Http\Request;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class HouseBillController extends Controller
 {
+    private UnifiedBillingService $billingService;
+
+    public function __construct(UnifiedBillingService $billingService)
+    {
+        $this->billingService = $billingService;
+    }
+
     public function index(Request $request)
     {
         $bills = HouseRental::query()
@@ -35,6 +43,12 @@ class HouseBillController extends Controller
             ->orderByDesc('timestamp')
             ->paginate(15)
             ->withQueryString();
+
+        // Calculate maxPayable for each bill
+        $bills->getCollection()->transform(function ($bill) {
+            $bill->maxPayable = $this->billingService->getMaxPayableAmount('house', $bill->houseNo, $bill->month);
+            return $bill;
+        });
 
         return view('admin.house_bills.index', compact('bills'));
     }

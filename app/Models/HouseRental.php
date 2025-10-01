@@ -11,7 +11,7 @@ class HouseRental extends Model
 
     protected $fillable = [
         'houseNo','readingUnit','month','openingReadingUnit','billAmount',
-        'paidAmount','paymentMethod','recipt','status','timestamp','customer_paid_at','approved_at'
+        'paidAmount','monthly_collection_amount','collection_month','paymentMethod','recipt','status','timestamp','customer_paid_at','approved_at'
     ];
 
     protected $casts = [

@@ -4,12 +4,19 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\HouseRental;
+use App\Services\UnifiedBillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class HouseBillApproveController extends Controller
 {
+    private UnifiedBillingService $billingService;
+
+    public function __construct(UnifiedBillingService $billingService)
+    {
+        $this->billingService = $billingService;
+    }
     public function approve(Request $request, int $id)
     {
         // ---------- BULK ----------
@@ -51,15 +58,36 @@ class HouseBillApproveController extends Controller
                         continue;
                     }
 
-                    // If no amount recorded yet and bulk is CASH, assume "this month only"
-                    if ((float)$row->paidAmount <= 0 && $data['paymentMethod'] === 'cash') {
-                        $row->paidAmount = (float)$row->billAmount;
+                    // Calculate maximum payable amount (prevents overpayment)
+                    $maxPayable = $this->billingService->getMaxPayableAmount('house', $row->houseNo, $row->month);
+                    
+                    $newPaymentAmount = 0;
+                    
+                    // If no amount recorded yet, auto-fill for any payment method
+                    if ((float)$row->paidAmount <= 0) {
+                        $targetAmount = min((float)$row->billAmount, $maxPayable);
+                        $newPaymentAmount = max(0, $targetAmount - (float)$row->paidAmount);
+                    } else {
+                        // For existing partial payments, we don't add more in bulk mode
+                        $skipped++;
+                        continue;
+                    }
+
+                    if ($newPaymentAmount <= 0) {
+                        $skipped++;
+                        continue;
                     }
 
                     $row->paymentMethod = $data['paymentMethod'];
 
-                    // Allocate & finalize (no receipt for bulk)
-                    $this->allocateAndFinalize($row, null);
+                    // Use unified billing service to process the NEW payment amount (no receipt for bulk)
+                    $this->billingService->processHousePayment(
+                        $row, 
+                        $newPaymentAmount, 
+                        $data['paymentMethod'], 
+                        null,
+                        now()
+                    );
                     $processed++;
                 }
             });
@@ -95,23 +123,49 @@ class HouseBillApproveController extends Controller
                 $receiptPath = $request->file('recipt')->store('receipts', 'public');
             }
 
-            // Use explicit amount if provided; else for CASH assume "this month only" if nothing yet/short
+            // Calculate maximum payable amount (prevents overpayment)
+            $maxPayable = $this->billingService->getMaxPayableAmount('house', $bill->houseNo, $bill->month);
+            
+            $newPaymentAmount = 0;
+
+            // Use explicit amount if provided; else auto-fill based on payment method and current state
             if (array_key_exists('paidAmount', $data) && $data['paidAmount'] !== null) {
-                // For subsequent partial payments, ADD to existing amount
-                if ($bill->status === 'PartPayment' && (float)$bill->paidAmount > 0) {
-                    $bill->paidAmount = (float)$bill->paidAmount + (float)$data['paidAmount'];
-                } else {
-                    $bill->paidAmount = (float)$data['paidAmount'];
-                }
-            } elseif ($data['paymentMethod'] === 'cash' && (float)$bill->paidAmount < (float)$bill->billAmount && $bill->status !== 'PartPayment') {
-                // Only auto-fill for first-time cash payments, not subsequent partial payments
-                $bill->paidAmount = (float)$bill->billAmount;
+                // For subsequent partial payments, this is the NEW payment amount to add
+                $newPaymentAmount = (float)$data['paidAmount'];
+                
+                // Check if adding this would exceed max payable
+                $currentPaid = (float)$bill->paidAmount;
+                $maxNewPayment = max(0, $maxPayable - $currentPaid);
+                $newPaymentAmount = min($newPaymentAmount, $maxNewPayment);
+                
+            } elseif ((float)$bill->paidAmount > 0) {
+                // Bill already has payment amount (from customer payment) - process the existing amount
+                $newPaymentAmount = (float)$bill->paidAmount;
+                // Reset paidAmount to 0 so the service can properly allocate it
+                $bill->paidAmount = 0;
+                $bill->save();
+                
+            } elseif ((float)$bill->paidAmount < (float)$bill->billAmount && $bill->status !== 'PartPayment') {
+                // Auto-fill for first-time payments (any method), not subsequent partial payments
+                // Cap to max payable amount to prevent overpayment
+                $targetAmount = min((float)$bill->billAmount, $maxPayable);
+                $newPaymentAmount = max(0, $targetAmount - (float)$bill->paidAmount);
+            }
+
+            if ($newPaymentAmount <= 0) {
+                return back()->withErrors(['error' => 'No outstanding amount to pay or invalid payment amount.']);
             }
 
             $bill->paymentMethod = $data['paymentMethod'];
 
-            // Allocate & finalize (pass receipt path)
-            $this->allocateAndFinalize($bill, $receiptPath);
+            // Use unified billing service to process the NEW payment amount
+            $this->billingService->processHousePayment(
+                $bill, 
+                $newPaymentAmount, 
+                $data['paymentMethod'], 
+                $receiptPath,
+                now()
+            );
         });
 
         return back()->with('success', 'Bill approved.');
@@ -128,96 +182,5 @@ class HouseBillApproveController extends Controller
         $bill->save();
 
         return back()->with('success', 'Bill rejected.');
-    }
-
-    /**
-     * Allocate the payment recorded on the *latest* row:
-     *   1) Apply to earlier months' deficits (oldest -> newest) until cleared
-     *   2) Apply remaining to the current month (cap at its billAmount)
-     * Then set statuses and approved_at on all affected rows.
-     *
-     * IMPORTANT:
-     * - The current month keeps its full paidAmount (what customer actually paid)
-     * - Earlier months get their paidAmount updated with allocated portions
-     * - Status is determined by how much of THIS month's bill was covered
-     */
-    protected function allocateAndFinalize(HouseRental $current, ?string $receiptPath = null): void
-    {
-        $eps       = 0.01;
-        $txnTotal  = round(max(0, (float)$current->paidAmount), 2); // what the customer paid now
-        $pool      = $txnTotal;                                     // we'll spend this pool across arrears + current
-        
-        // Store the original customer payment amount
-        $customerPaidAmount = $txnTotal;
-
-        // 1) Clear earlier months first (oldest → newest)
-        if ($pool > 0) {
-            $earliers = HouseRental::where('houseNo', $current->houseNo)
-                ->where('month', '<', $current->month)
-                ->orderBy('month') // oldest first
-                ->lockForUpdate()
-                ->get();
-
-            foreach ($earliers as $r) {
-                // Skip hard rejections if desired:
-                // if ($r->status === 'Rejected') continue;
-
-                $need = round(max(0, (float)$r->billAmount - (float)$r->paidAmount), 2);
-                if ($need <= 0) continue;
-
-                $alloc = min($need, $pool);
-                if ($alloc > 0) {
-                    $r->paidAmount = round((float)$r->paidAmount + $alloc, 2);
-
-                    if ($r->paidAmount + $eps >= (float)$r->billAmount) {
-                        $r->paidAmount  = (float)$r->billAmount;
-                        $r->status      = 'Approved';
-                        $r->approved_at = $r->approved_at ?? now();
-                    } else {
-                        $r->status = 'PartPayment';
-                    }
-
-                    // Mirror method if missing
-                    if (!$r->paymentMethod && $current->paymentMethod) {
-                        $r->paymentMethod = $current->paymentMethod;
-                    }
-
-                    $r->save();
-
-                    $pool = round($pool - $alloc, 2);
-                    if ($pool <= 0) break;
-                }
-            }
-        }
-
-        // 2) Determine status based on how much of THIS month's bill is covered by remaining pool
-        $appliedToCurrent = min($pool, (float)$current->billAmount);
-        $current->approved_at = now();
-        
-        // Keep the original customer payment amount (don't overwrite with allocated portion)
-        $current->paidAmount = $customerPaidAmount;
-        
-        // Status is based on how much of this month's bill was covered after paying arrears
-        $current->status = $this->statusFor((float)$current->billAmount, $appliedToCurrent);
-
-        // Save receipt if provided
-        if ($receiptPath) {
-            $current->recipt = $receiptPath;
-        }
-
-        $current->save();
-
-        // NOTE: If ($pool - $appliedToCurrent) > 0, that's true overpayment/credit.
-        // You can store it in a credits table and auto-apply next month if needed.
-    }
-
-    /** Decide status from bill vs paid portion. */
-    protected function statusFor(float $bill, float $paidPortionForThisMonth): string
-    {
-        $eps = 0.01;
-        if ($paidPortionForThisMonth <= $eps)        return 'Pending';
-        if ($paidPortionForThisMonth + $eps < $bill) return 'PartPayment';
-        if ($paidPortionForThisMonth >  $bill + $eps) return 'ExtraPayment';
-        return 'Approved';
     }
 }

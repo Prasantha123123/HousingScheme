@@ -148,11 +148,20 @@
               Approve
             </button>
           @else
+            @php
+              // Calculate outstanding balance for cash payment auto-fill
+              $carry = $rows->where('shopNumber', $r->shopNumber)
+                           ->where('month', '<', $r->month)
+                           ->sum(fn($rental) => max(0, (float)$rental->billAmount - (float)$rental->paidAmount));
+              $totalDue = (float)$r->billAmount + $carry;
+              $outstanding = max(0, $totalDue - (float)$r->paidAmount);
+              $cashAmount = min((float)$r->billAmount, $outstanding); // Cap to outstanding for cash
+            @endphp
             <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="inline">
               @csrf
               <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod }}">
               @if($r->paymentMethod === 'cash' && (float)$r->paidAmount <= 0)
-                <input type="hidden" name="paidAmount" value="{{ $r->billAmount }}">
+                <input type="hidden" name="paidAmount" value="{{ $cashAmount }}">
               @endif
               <button class="px-2 py-1 text-green-700">Approve</button>
             </form>
@@ -169,27 +178,42 @@
     </div>
 
     @if($r->status !== 'Approved' && (empty($r->paymentMethod) || $r->status === 'PartPayment'))
+      @php
+        $maxPayable = $r->maxPayable ?? 0;
+      @endphp
       <x-modal :name="'approve-'.$r->id" :title="'Approve Rental #'.$r->id">
-        <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="space-y-3">
-          @csrf
-          <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod ?: 'cash' }}">
-          <p class="text-sm text-gray-600">
-            Recording a <span class="font-medium">{{ $r->paymentMethod ?: 'cash' }}</span> payment.
-            @if($r->status === 'PartPayment')
-              <br><span class="text-orange-600">Additional payment for partial rental.</span>
-            @endif
-          </p>
-          <label class="block">
-            <span class="text-sm">Paid Amount</span>
-            <input type="number" name="paidAmount" step="0.01" min="0"
-                   value="{{ old('paidAmount', '') }}"
-                   placeholder="Enter additional amount"
-                   class="mt-1 w-full rounded border-gray-300" required>
-          </label>
-          <div class="text-right">
-            <button class="px-3 py-2 bg-green-600 text-white rounded-lg">Approve</button>
-          </div>
-        </form>
+        <div x-data="{ paidAmount: '', maxAmount: {{ $maxPayable }} }">
+          <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="space-y-3">
+            @csrf
+            <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod ?: 'cash' }}">
+            <p class="text-sm text-gray-600">
+              Recording a <span class="font-medium">{{ $r->paymentMethod ?: 'cash' }}</span> payment.
+              @if($r->status === 'PartPayment')
+                <br><span class="text-orange-600">Additional payment for partial rental.</span>
+              @endif
+              <br><span class="text-sm text-gray-500">Maximum payable amount: Rs {{ number_format($maxPayable, 2) }}</span>
+            </p>
+            <label class="block">
+              <span class="text-sm">Paid Amount</span>
+              <input type="number" name="paidAmount" step="0.01" min="0" max="{{ $maxPayable }}"
+                     x-model="paidAmount"
+                     value="{{ old('paidAmount', '') }}"
+                     placeholder="Enter amount (max: {{ number_format($maxPayable, 2) }})"
+                     class="mt-1 w-full rounded border-gray-300" required>
+              <div x-show="parseFloat(paidAmount) > maxAmount" class="text-red-600 text-xs mt-1">
+                Payment amount cannot exceed the maximum payable amount of Rs {{ number_format($maxPayable, 2) }}
+              </div>
+            </label>
+            <div class="text-right">
+              <button type="submit" 
+                      :disabled="parseFloat(paidAmount) > maxAmount || !paidAmount"
+                      :class="{ 'opacity-50 cursor-not-allowed': parseFloat(paidAmount) > maxAmount || !paidAmount }"
+                      class="px-3 py-2 bg-green-600 text-white rounded-lg">
+                Approve
+              </button>
+            </div>
+          </form>
+        </div>
       </x-modal>
     @endif
   @empty
@@ -215,6 +239,8 @@
     @forelse($rows ?? [] as $r)
       @php
         $balance = max(0, (float)$r->billAmount - (float)$r->paidAmount);
+        // Show monthly collection amount if this bill matches the collection month
+        $monthlyCollected = ($r->collection_month === $r->month) ? (float)$r->monthly_collection_amount : 0;
       @endphp
       <tr class="hover:bg-gray-50 align-middle">
         <td class="px-3 py-2 w-32">{{ $r->shopNumber }}</td>
@@ -244,11 +270,20 @@
                 Approve
               </button>
             @else
+              @php
+                // Calculate outstanding balance for cash payment auto-fill
+                $carry = $rows->where('shopNumber', $r->shopNumber)
+                             ->where('month', '<', $r->month)
+                             ->sum(fn($rental) => max(0, (float)$rental->billAmount - (float)$rental->paidAmount));
+                $totalDue = (float)$r->billAmount + $carry;
+                $outstanding = max(0, $totalDue - (float)$r->paidAmount);
+                $cashAmount = min((float)$r->billAmount, $outstanding); // Cap to outstanding for cash
+              @endphp
               <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="inline">
                 @csrf
                 <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod }}">
                 @if($r->paymentMethod === 'cash' && (float)$r->paidAmount <= 0)
-                  <input type="hidden" name="paidAmount" value="{{ $r->billAmount }}">
+                  <input type="hidden" name="paidAmount" value="{{ $cashAmount }}">
                 @endif
                 <button class="text-green-700">Approve</button>
               </form>
@@ -266,27 +301,42 @@
       </tr>
 
       @if($r->status !== 'Approved' && (empty($r->paymentMethod) || $r->status === 'PartPayment'))
+        @php
+          $maxPayable = $r->maxPayable ?? 0;
+        @endphp
         <x-modal :name="'approve-'.$r->id" :title="'Approve Rental #'.$r->id">
-          <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="space-y-3">
-            @csrf
-            <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod ?: 'cash' }}">
-            <p class="text-sm text-gray-600">
-              Recording a <span class="font-medium">{{ $r->paymentMethod ?: 'cash' }}</span> payment.
-              @if($r->status === 'PartPayment')
-                <br><span class="text-orange-600">Additional payment for partial rental.</span>
-              @endif
-            </p>
-            <label class="block">
-              <span class="text-sm">Paid Amount</span>
-              <input type="number" name="paidAmount" step="0.01" min="0"
-                     value="{{ old('paidAmount', '') }}"
-                     placeholder="Enter additional amount"
-                     class="mt-1 w-full rounded border-gray-300" required>
-            </label>
-            <div class="text-right">
-              <button class="px-3 py-2 bg-green-600 text-white rounded-lg">Approve</button>
-            </div>
-          </form>
+          <div x-data="{ paidAmount: '', maxAmount: {{ $maxPayable }} }">
+            <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="space-y-3">
+              @csrf
+              <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod ?: 'cash' }}">
+              <p class="text-sm text-gray-600">
+                Recording a <span class="font-medium">{{ $r->paymentMethod ?: 'cash' }}</span> payment.
+                @if($r->status === 'PartPayment')
+                  <br><span class="text-orange-600">Additional payment for partial rental.</span>
+                @endif
+                <br><span class="text-sm text-gray-500">Maximum payable amount: Rs {{ number_format($maxPayable, 2) }}</span>
+              </p>
+              <label class="block">
+                <span class="text-sm">Paid Amount</span>
+                <input type="number" name="paidAmount" step="0.01" min="0" max="{{ $maxPayable }}"
+                       x-model="paidAmount"
+                       value="{{ old('paidAmount', '') }}"
+                       placeholder="Enter amount (max: {{ number_format($maxPayable, 2) }})"
+                       class="mt-1 w-full rounded border-gray-300" required>
+                <div x-show="parseFloat(paidAmount) > maxAmount" class="text-red-600 text-xs mt-1">
+                  Payment amount cannot exceed the maximum payable amount of Rs {{ number_format($maxPayable, 2) }}
+                </div>
+              </label>
+              <div class="text-right">
+                <button type="submit" 
+                        :disabled="parseFloat(paidAmount) > maxAmount || !paidAmount"
+                        :class="{ 'opacity-50 cursor-not-allowed': parseFloat(paidAmount) > maxAmount || !paidAmount }"
+                        class="px-3 py-2 bg-green-600 text-white rounded-lg">
+                  Approve
+                </button>
+              </div>
+            </form>
+          </div>
         </x-modal>
       @endif
     @empty

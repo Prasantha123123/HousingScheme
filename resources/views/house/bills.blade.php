@@ -52,6 +52,11 @@
       $balanceThisRow = max(0, $total - $paid);
       $outstanding = number_format($balanceThisRow, 2, '.', ''); // ✅ default for input
       $canPay = ($b->id === $latestPending) && $b->status !== 'Approved';
+      
+      // Payment button control logic
+      // Enable payment if: 1) Can pay AND 2) Either no payment made yet OR status is PartPayment
+      $allowPayment = $canPay && ($b->paidAmount == 0 || $b->status === 'PartPayment');
+      $isPaymentPending = $b->paidAmount > 0 && in_array($b->status, ['Pending', 'ExtraPayment']);
     @endphp
 
     <div class="bg-white rounded-lg p-4 mb-3 border">
@@ -63,42 +68,66 @@
       <dl class="grid grid-cols-2 md:grid-cols-6 gap-2 text-sm mt-2">
         <div>
           <dt class="text-gray-500">Sewerage</dt>
-          <dd>{{ number_format($sewerage,2) }}</dd>
+          <dd>Rs {{ number_format($sewerage,2) }}</dd>
         </div>
         <div>
           <dt class="text-gray-500">Service</dt>
-          <dd>{{ number_format($service,2) }}</dd>
+          <dd>Rs {{ number_format($service,2) }}</dd>
         </div>
         <div>
           <dt class="text-gray-500">Usage</dt>
-          <dd>{{ $usage }} × {{ number_format($unitPrice,2) }}</dd>
+          <dd>{{ $usage }} × Rs {{ number_format($unitPrice,2) }}</dd>
         </div>
         <div>
           <dt class="text-gray-500">Carry Forward</dt>
-          <dd>{{ number_format($carry,2) }}</dd>
+          <dd>Rs {{ number_format($carry,2) }}</dd>
         </div>
         <div>
           <dt class="text-gray-500">Paid</dt>
-          <dd class="font-semibold">{{ number_format($paid,2) }}</dd>
+          <dd class="font-semibold">Rs {{ number_format($paid,2) }}</dd>
         </div>
         <div>
           <dt class="text-gray-500">Balance</dt>
-          <dd class="font-semibold">{{ number_format($balanceThisRow,2) }}</dd>
+          <dd class="font-semibold">Rs {{ number_format($balanceThisRow,2) }}</dd>
         </div>
       </dl>
 
       <div class="mt-2 text-sm">
-        <span class="text-gray-500">Total (carry + current)</span> ·
-        <span class="font-semibold">{{ number_format($total,2) }}</span>
+        <span class="text-gray-500">Total (carry + current)</span> →
+        <span class="font-semibold">Rs {{ number_format($total,2) }}</span>
       </div>
 
       @if($b->status !== 'Approved')
-        <div class="mt-3" x-data="{ method: '{{ $b->paymentMethod === 'card' ? 'card' : 'online' }}' }">
+        <div class="mt-3" x-data="{ 
+          method: '{{ $b->paymentMethod === 'card' ? 'card' : 'online' }}',
+          amount: {{ $outstanding }},
+          maxAmount: {{ $outstanding }},
+          allowPayment: {{ $allowPayment ? 'true' : 'false' }},
+          isValidAmount() {
+            return this.amount > 0 && this.amount <= this.maxAmount;
+          }
+        }">
+          
+          @if($isPaymentPending)
+            <div class="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div class="flex items-center">
+                <div class="text-yellow-600">⏳</div>
+                <div class="ml-2 text-sm text-yellow-800">
+                  @if($b->status === 'Pending')
+                    Payment submitted and awaiting admin approval
+                  @elseif($b->status === 'ExtraPayment')
+                    Overpayment detected - awaiting admin review
+                  @endif
+                </div>
+              </div>
+            </div>
+          @endif
+
           <div class="max-w-4xl grid grid-cols-1 sm:grid-cols-6 gap-3 items-end" x-cloak>
             {{-- Payment Method --}}
             <label class="sm:col-span-2">
               <span class="text-sm text-gray-600">Payment Method</span>
-              <select x-model="method" class="mt-1 w-full rounded border-gray-300 h-10" @disabled(!$canPay)>
+              <select x-model="method" class="mt-1 w-full rounded border-gray-300 h-10" :disabled="!allowPayment">>
                 <option value="card">Card</option>
                 <option value="online">Bank Transfer</option>
               </select>
@@ -113,11 +142,18 @@
                 type="number"
                 step="0.01"
                 min="0.01"
+                max="{{ $outstanding }}"
+                x-model="amount"
                 class="mt-1 w-full rounded border-gray-300 h-10"
+                :class="{ 'border-red-500': !isValidAmount() }"
                 value="{{ old('amount', $outstanding) }}"
                 placeholder="{{ $outstanding }}"
-                @disabled(!$canPay)
+                :disabled="!allowPayment"
               >
+              <div class="text-xs mt-1" :class="!isValidAmount() ? 'text-red-500' : 'text-gray-500'">
+                <span x-show="isValidAmount()">Maximum: Rs {{ number_format($balanceThisRow, 2) }}</span>
+                <span x-show="!isValidAmount()">⚠️ Amount cannot exceed Rs {{ number_format($balanceThisRow, 2) }}</span>
+              </div>
             </label>
 
             {{-- Bank Ref (online only) --}}
@@ -129,7 +165,7 @@
                 class="mt-1 w-full rounded border-gray-300 h-10"
                 placeholder="e.g. HSC-12345"
                 :required="method==='online'"
-                @disabled(!$canPay)
+                :disabled="!allowPayment"
               >
             </label>
 
@@ -143,7 +179,7 @@
                 class="mt-1 block w-full text-sm"
                 accept="application/pdf,image/png,image/jpeg"
                 :required="method==='online'"
-                @disabled(!$canPay)
+                :disabled="!allowPayment"
               >
             </label>
           </div>
@@ -154,14 +190,21 @@
                           : '{{ route('house.bills.pay.transfer',$b->id) }}'">
             @csrf
             <button
-              class="mt-3 px-3 py-2 rounded-lg text-white {{ $canPay ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed' }}"
-              @disabled(!$canPay)>
+              class="mt-3 px-3 py-2 rounded-lg text-white"
+              :class="allowPayment && isValidAmount() ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'"
+              :disabled="!allowPayment || !isValidAmount()">
               Pay Now
             </button>
           </form>
 
-          @unless($canPay)
-            <p class="mt-2 text-xs text-gray-500">You can only pay the latest outstanding bill.</p>
+          @unless($allowPayment)
+            <p class="mt-2 text-xs text-gray-500">
+              @if(!$canPay)
+                You can only pay the latest outstanding bill.
+              @elseif($isPaymentPending)
+                Payment awaiting admin approval.
+              @endif
+            </p>
           @endunless
         </div>
       @endif

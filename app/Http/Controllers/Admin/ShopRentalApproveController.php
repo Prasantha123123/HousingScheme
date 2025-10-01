@@ -4,12 +4,19 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ShopRental;
+use App\Services\UnifiedBillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class ShopRentalApproveController extends Controller
 {
+    private UnifiedBillingService $billingService;
+
+    public function __construct(UnifiedBillingService $billingService)
+    {
+        $this->billingService = $billingService;
+    }
     public function approve(Request $request, int $id)
     {
         // ---------- BULK ----------
@@ -20,21 +27,73 @@ class ShopRentalApproveController extends Controller
                 'paymentMethod' => ['required', Rule::in(['cash','card','online'])],
             ]);
 
-            $method = $data['paymentMethod'];
+            $processed = 0;
+            $skipped   = 0;
 
-            DB::transaction(function () use ($data, $method) {
-                $rows = ShopRental::whereIn('id', $data['ids'])->lockForUpdate()->get();
+            DB::transaction(function () use ($data, &$processed, &$skipped) {
+                // Lock all selected rows
+                $rows = ShopRental::whereIn('id', $data['ids'])
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
 
-                foreach ($rows as $r) {
-                    // If approving as CASH in bulk, mark paid in full; otherwise keep existing paidAmount
-                    $paid = ($method === 'cash') ? (float) $r->billAmount : (float) $r->paidAmount;
+                // Determine the latest NOT-approved row per shop
+                $latestPerShop = [];
+                foreach ($rows as $row) {
+                    $latest = ShopRental::where('shopNumber', $row->shopNumber)
+                        ->where('status', '!=', 'Approved')
+                        ->orderBy('month', 'desc')
+                        ->lockForUpdate()
+                        ->first();
 
-                    // Use the allocation logic for bulk approvals too
-                    $this->allocateAndFinalize($r, $paid, $method, null);
+                    if ($latest) {
+                        $latestPerShop[$row->shopNumber] = $latest->id;
+                    }
+                }
+
+                foreach ($rows as $row) {
+                    // Only process if this row IS the latest outstanding for that shop
+                    if (($latestPerShop[$row->shopNumber] ?? null) !== $row->id) {
+                        $skipped++;
+                        continue;
+                    }
+
+                    // Calculate maximum payable amount (prevents overpayment)
+                    $maxPayable = $this->billingService->getMaxPayableAmount('shop', $row->shopNumber, $row->month);
+                    
+                    $newPaymentAmount = 0;
+                    
+                    // If no amount recorded yet and bulk is CASH, cap to max payable
+                    if ((float)$row->paidAmount <= 0 && $data['paymentMethod'] === 'cash') {
+                        $targetAmount = min((float)$row->billAmount, $maxPayable);
+                        $newPaymentAmount = max(0, $targetAmount - (float)$row->paidAmount);
+                    } else {
+                        // For existing partial payments, we don't add more in bulk mode
+                        $skipped++;
+                        continue;
+                    }
+
+                    if ($newPaymentAmount <= 0) {
+                        $skipped++;
+                        continue;
+                    }
+
+                    $row->paymentMethod = $data['paymentMethod'];
+
+                    // Use unified billing service to process the NEW payment amount (no receipt for bulk)
+                    $this->billingService->processShopPayment(
+                        $row, 
+                        $newPaymentAmount, 
+                        $data['paymentMethod'], 
+                        null,
+                        now()
+                    );
+                    $processed++;
                 }
             });
 
-            return back()->with('success', 'Selected rentals approved.');
+            $msg = "Bulk approve finished. Processed: {$processed}".($skipped ? " · Skipped (not latest): {$skipped}" : '');
+            return back()->with('success', $msg);
         }
 
         // ---------- SINGLE ----------
@@ -45,118 +104,71 @@ class ShopRentalApproveController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $data, $id) {
-            $r = ShopRental::lockForUpdate()->findOrFail($id);
+            /** @var ShopRental $rental */
+            $rental = ShopRental::lockForUpdate()->findOrFail($id);
+
+            // Must be the latest outstanding rental for this shop
+            $latestOpen = ShopRental::where('shopNumber', $rental->shopNumber)
+                ->where('status', '!=', 'Approved')
+                ->orderBy('month', 'desc')
+                ->lockForUpdate()
+                ->first();
+
+            if (!$latestOpen || $latestOpen->id !== $rental->id) {
+                abort(422, 'Please approve the latest outstanding rental for this shop first.');
+            }
 
             $receiptPath = null;
             if ($request->hasFile('recipt')) {
                 $receiptPath = $request->file('recipt')->store('receipts', 'public');
             }
 
-            // Handle payment amount logic
-            $paid = $data['paidAmount'] ?? null;
+            // Calculate maximum payable amount (prevents overpayment)
+            $maxPayable = $this->billingService->getMaxPayableAmount('shop', $rental->shopNumber, $rental->month);
             
-            if ($paid !== null) {
-                // For subsequent partial payments, ADD to existing amount
-                if ($r->status === 'PartPayment' && (float)$r->paidAmount > 0) {
-                    $paid = (float)$r->paidAmount + (float)$paid;
-                } else {
-                    $paid = (float)$paid;
-                }
-            } elseif ($data['paymentMethod'] === 'cash' && $r->status !== 'PartPayment') {
-                // Only auto-fill for first-time cash payments, not subsequent partial payments
-                $paid = (float) $r->billAmount;
-            } else {
-                $paid = (float) $r->paidAmount; // Keep existing paid amount
+            $newPaymentAmount = 0;
+
+            // Use explicit amount if provided; else auto-fill based on payment method and current state
+            if (array_key_exists('paidAmount', $data) && $data['paidAmount'] !== null) {
+                // For subsequent partial payments, this is the NEW payment amount to add
+                $newPaymentAmount = (float)$data['paidAmount'];
+                
+                // Check if adding this would exceed max payable
+                $currentPaid = (float)$rental->paidAmount;
+                $maxNewPayment = max(0, $maxPayable - $currentPaid);
+                $newPaymentAmount = min($newPaymentAmount, $maxNewPayment);
+                
+            } elseif ((float)$rental->paidAmount > 0) {
+                // Rental already has payment amount (from customer payment) - process the existing amount
+                $newPaymentAmount = (float)$rental->paidAmount;
+                // Reset paidAmount to 0 so the service can properly allocate it
+                $rental->paidAmount = 0;
+                $rental->save();
+                
+            } elseif ((float)$rental->paidAmount < (float)$rental->billAmount && $rental->status !== 'PartPayment') {
+                // Auto-fill for first-time payments (any method), not subsequent partial payments
+                // Cap to max payable amount to prevent overpayment
+                $targetAmount = min((float)$rental->billAmount, $maxPayable);
+                $newPaymentAmount = max(0, $targetAmount - (float)$rental->paidAmount);
             }
 
-            $this->allocateAndFinalize($r, $paid, $data['paymentMethod'], $receiptPath);
+            if ($newPaymentAmount <= 0) {
+                return back()->withErrors(['error' => 'No outstanding amount to pay or invalid payment amount.']);
+            }
+
+            $rental->paymentMethod = $data['paymentMethod'];
+
+            // Use unified billing service to process the NEW payment amount
+            $this->billingService->processShopPayment(
+                $rental, 
+                $newPaymentAmount, 
+                $data['paymentMethod'], 
+                $receiptPath,
+                now()
+            );
         });
 
         return back()->with('success', 'Rental approved.');
-    }
-
-    /**
-     * Allocate payment across earlier months and finalize approval
-     * This replicates the house bill approval logic exactly
-     */
-    private function allocateAndFinalize(ShopRental $rental, float $paidAmount, string $paymentMethod, ?string $receiptPath)
-    {
-        $eps = 0.01;
-        $txnTotal = round(max(0, $paidAmount), 2); // what the customer paid now
-        $pool = $txnTotal; // we'll spend this pool across arrears + current
-        
-        // Store the original customer payment amount
-        $customerPaidAmount = $txnTotal;
-
-        // Step 1: Clear earlier months first (oldest → newest)
-        if ($pool > 0) {
-            $previousRentals = ShopRental::where('shopNumber', $rental->shopNumber)
-                ->where('month', '<', $rental->month)
-                ->orderBy('month') // oldest first
-                ->lockForUpdate()
-                ->get();
-
-            foreach ($previousRentals as $r) {
-                // Skip hard rejections if desired:
-                // if ($r->status === 'Rejected') continue;
-
-                $need = round(max(0, (float)$r->billAmount - (float)$r->paidAmount), 2);
-                if ($need <= 0) continue;
-
-                $alloc = min($need, $pool);
-                if ($alloc > 0) {
-                    $r->paidAmount = round((float)$r->paidAmount + $alloc, 2);
-
-                    if ($r->paidAmount + $eps >= (float)$r->billAmount) {
-                        $r->paidAmount = (float)$r->billAmount;
-                        $r->status = 'Approved';
-                        $r->approved_at = $r->approved_at ?? now();
-                    } else {
-                        $r->status = 'PartPayment';
-                    }
-
-                    // Mirror payment method if missing
-                    if (!$r->paymentMethod && $paymentMethod) {
-                        $r->paymentMethod = $paymentMethod;
-                    }
-
-                    $r->save();
-
-                    $pool = round($pool - $alloc, 2);
-                    if ($pool <= 0) break;
-                }
-            }
-        }
-
-        // Step 2: Determine status based on how much of THIS rental's bill is covered by remaining pool
-        $appliedToCurrent = min($pool, (float)$rental->billAmount);
-        $rental->approved_at = now();
-        
-        // Keep the original customer payment amount (don't overwrite with allocated portion)
-        $rental->paidAmount = $customerPaidAmount;
-        $rental->paymentMethod = $paymentMethod;
-        
-        // Status is based on how much of this month's bill was covered after paying arrears
-        $rental->status = $this->statusFor((float)$rental->billAmount, $appliedToCurrent);
-        
-        if ($receiptPath) {
-            $rental->recipt = $receiptPath;
-        }
-        
-        $rental->save();
-
-        // NOTE: If ($pool - $appliedToCurrent) > 0, that's true overpayment/credit.
-        // You can store it in a credits table and auto-apply next month if needed.
-    }
-
-    /** Decide status from bill vs paid portion. */
-    protected function statusFor(float $bill, float $paidPortionForThisMonth): string
-    {
-        $eps = 0.01;
-        if ($paidPortionForThisMonth <= $eps)        return 'Pending';
-        if ($paidPortionForThisMonth + $eps < $bill) return 'PartPayment';
-        if ($paidPortionForThisMonth >  $bill + $eps) return 'ExtraPayment';
-        return 'Approved';
     }
 
     public function reject(Request $request, int $id)

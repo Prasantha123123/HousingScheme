@@ -25,25 +25,25 @@
     <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
       <div>
         <div class="text-gray-500">Current Month</div>
-        <div class="font-semibold">{{ number_format($current, 2) }}</div>
+        <div class="font-semibold">Rs {{ number_format($current, 2) }}</div>
       </div>
       <div>
         <div class="text-gray-500">Carry Forward</div>
-        <div class="font-medium">{{ number_format($carry, 2) }}</div>
+        <div class="font-medium">Rs {{ number_format($carry, 2) }}</div>
       </div>
       <div>
         <div class="text-gray-500">Total Due</div>
-        <div class="font-semibold">{{ number_format($total, 2) }}</div>
+        <div class="font-semibold">Rs {{ number_format($total, 2) }}</div>
       </div>
       <div>
         <div class="text-gray-500">Paid</div>
-        <div>{{ number_format($r->paidAmount, 2) }}</div>
+        <div>Rs {{ number_format($r->paidAmount, 2) }}</div>
       </div>
     </div>
     
     @if($outstanding > 0)
       <div class="mt-2 text-sm">
-        <div class="text-red-600 font-medium">Outstanding: {{ number_format($outstanding, 2) }}</div>
+        <div class="text-red-600 font-medium">Outstanding: Rs {{ number_format($outstanding, 2) }}</div>
       </div>
     @endif
 
@@ -55,18 +55,25 @@
 
     @if($allowPayment && $outstanding > 0)
       {{-- Enhanced payment form with carry forward support --}}
+      <div x-data="{ 
+        method: 'card', 
+        amount: {{ $outstanding }},
+        maxAmount: {{ $outstanding }},
+        isValidAmount() {
+          return this.amount > 0 && this.amount <= this.maxAmount;
+        }
+      }" class="mt-3">
+      
       <form
-        x-data="{ method: 'card', maxAmount: {{ $outstanding }} }"
         x-bind:action="method === 'card'
             ? '{{ route('merchant.rentals.pay.card',   $r->id) }}'
             : '{{ route('merchant.rentals.pay.transfer',$r->id) }}'"
         method="post" enctype="multipart/form-data"
-        class="mt-3"
       >
         @csrf
 
         @php
-          $isPaymentPending = in_array($r->status, ['Pending', 'ExtraPayment']) && $r->paidAmount > 0;
+          $isPaymentPending = in_array($r->status, ['InProgress', 'Pending', 'ExtraPayment']) && $r->paidAmount > 0;
         @endphp
 
         @if($isPaymentPending)
@@ -74,7 +81,9 @@
             <div class="flex items-center">
               <div class="text-yellow-600">⏳</div>
               <div class="ml-2 text-sm text-yellow-800">
-                @if($r->status === 'Pending')
+                @if($r->status === 'InProgress')
+                  Payment in progress - awaiting admin approval
+                @elseif($r->status === 'Pending')
                   Payment submitted and awaiting admin approval
                 @elseif($r->status === 'ExtraPayment')
                   Overpayment detected - awaiting admin review
@@ -102,17 +111,24 @@
 
           {{-- Amount Input --}}
           <label class="sm:col-span-1 block">
-            <span class="text-sm text-gray-600">Amount</span>
+            <span class="text-sm text-gray-600">Paid Amount</span>
             <input
               type="number"
               name="amount"
               step="0.01"
               min="0.01"
-              x-bind:max="maxAmount"
-              x-bind:placeholder="'Max: ' + maxAmount.toFixed(2)"
+              max="{{ $outstanding }}"
+              x-model="amount"
+              value="{{ old('amount', $outstanding) }}"
+              placeholder="{{ $outstanding }}"
               class="mt-1 w-full rounded border-gray-300 h-10"
+              :class="{ 'border-red-500': !isValidAmount() }"
               required
             >
+            <div class="text-xs mt-1" :class="!isValidAmount() ? 'text-orange-600' : 'text-gray-500'">
+              <span x-show="isValidAmount()">Maximum: Rs {{ number_format($outstanding, 2) }}</span>
+              <span x-show="!isValidAmount()">⚠ Amount cannot exceed Rs {{ number_format($outstanding, 2) }}</span>
+            </div>
           </label>
 
           {{-- Bank Reference (only for bank transfer) --}}
@@ -122,6 +138,7 @@
               name="reference"
               class="mt-1 w-full rounded border-gray-300 h-10"
               placeholder="e.g. HSC-12345"
+              :required="method === 'online'"
             >
           </label>
 
@@ -133,23 +150,27 @@
               name="recipt"
               accept="application/pdf,image/png,image/jpeg"
               class="mt-1 block w-full text-sm"
+              :required="method === 'online'"
             >
           </label>
 
           {{-- Submit button --}}
           <div class="sm:col-span-1 flex sm:justify-end">
             @php
-              $isDisabled = in_array($r->status, ['Pending', 'ExtraPayment']) && $r->paidAmount > 0;
+              $isDisabled = in_array($r->status, ['InProgress', 'Pending', 'ExtraPayment']) && $r->paidAmount > 0;
             @endphp
             <button
-              class="h-10 px-4 rounded-lg w-full sm:w-auto {{ $isDisabled ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700' }} text-white"
-              @if($isDisabled) disabled @endif
+              type="submit"
+              class="h-10 px-4 rounded-lg w-full sm:w-auto text-white"
+              :class="({{ $isDisabled ? 'true' : 'false' }} || !isValidAmount()) ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'"
+              :disabled="{{ $isDisabled ? 'true' : 'false' }} || !isValidAmount()"
             >
               <span x-text="method === 'card' ? 'Pay Now' : 'Submit Transfer'"></span>
             </button>
           </div>
         </div>
       </form>
+      </div>
     @elseif($r->status !== 'Approved' && $outstanding <= 0)
       <div class="mt-3 text-sm text-green-600 font-medium">
         Fully paid - awaiting admin approval
