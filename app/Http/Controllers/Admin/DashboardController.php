@@ -135,6 +135,11 @@ class DashboardController extends Controller
             'shopCarryForward' => $metrics['carry_forward']['shop'] ?? 0,
             'totalCarryForward' => $metrics['carry_forward']['total'] ?? 0,
             
+            // Previous Month Pending
+            'housePreviousMonthPending' => $metrics['previous_month_pending']['house'] ?? 0,
+            'shopPreviousMonthPending' => $metrics['previous_month_pending']['shop'] ?? 0,
+            'totalPreviousMonthPending' => $metrics['previous_month_pending']['total'] ?? 0,
+            
             // Combined counts
             'pendingCount' => $metrics['counts']['pending']['house']['count'] + $metrics['counts']['pending']['shop']['count'],
             'completedCount' => $metrics['counts']['completed']['house']['count'] + $metrics['counts']['completed']['shop']['count'],

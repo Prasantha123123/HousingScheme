@@ -78,7 +78,7 @@
         </div>
         <div class="flex justify-between py-1 border-t pt-2 font-semibold">
           <span>Previous Month Pending:</span>
-          <span class="text-blue-600">Rs {{ number_format($houseCarryForward ?? 0, 2) }}</span>
+          <span class="text-blue-600">Rs {{ number_format($housePreviousMonthPending ?? 0, 2) }}</span>
         </div>
       </div>
     </div>
@@ -100,7 +100,7 @@
         </div>
         <div class="flex justify-between py-1 border-t pt-2 font-semibold">
           <span>Previous Month Pending:</span>
-          <span class="text-orange-600">Rs {{ number_format($shopCarryForward ?? 0, 2) }}</span>
+          <span class="text-orange-600">Rs {{ number_format($shopPreviousMonthPending ?? 0, 2) }}</span>
         </div>
       </div>
     </div>
