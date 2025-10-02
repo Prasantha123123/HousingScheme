@@ -16,7 +16,7 @@
 {{-- AR Summary integrated --}}
 <div class="bg-white rounded-lg p-4 mb-4 border border-gray-200">
   <h3 class="text-lg font-semibold text-gray-800 mb-3">Collections Analysis</h3>
-  <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
     <div class="text-center">
       <div class="text-sm text-gray-600">Expected Collections</div>
       <div class="text-lg font-bold text-gray-800">Rs {{ number_format($billedRental ?? 0, 2) }}</div>
@@ -28,9 +28,14 @@
       <div class="text-xs text-gray-500">Total received</div>
     </div>
     <div class="text-center">
-      <div class="text-sm text-gray-600">Previous Month Carry Forward</div>
-      <div class="text-lg font-bold text-orange-600">Rs {{ number_format(max(0, (($houseCollected ?? 0) + ($shopCollected ?? 0)) - ($billedRental ?? 0)), 2) }}</div>
-      <div class="text-xs text-gray-500">Pending amounts collected</div>
+      <div class="text-sm text-gray-600">House Carry Forward</div>
+      <div class="text-lg font-bold text-blue-600">Rs {{ number_format($houseCarryForward ?? 0, 2) }}</div>
+      <div class="text-xs text-gray-500">House pending collected</div>
+    </div>
+    <div class="text-center">
+      <div class="text-sm text-gray-600">Shop Carry Forward</div>
+      <div class="text-lg font-bold text-orange-600">Rs {{ number_format($shopCarryForward ?? 0, 2) }}</div>
+      <div class="text-xs text-gray-500">Shop pending collected</div>
     </div>
   </div>
 </div>
@@ -52,7 +57,68 @@
   <x-stat title="Inventory Sales (Cash)" :value="number_format($invCollected ?? 0, 2)"/>
 </div>
 
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+{{-- Carry Forward Breakdown --}}
+<div class="bg-white rounded-lg p-4 mb-4 border border-gray-200">
+  <h3 class="text-lg font-semibold text-gray-800 mb-3">Carry Forward Analysis ({{ Carbon\Carbon::createFromFormat('Y-m', $month)->format('F Y') }})</h3>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+    {{-- House Carry Forward --}}
+    <div class="border rounded-lg p-4">
+      <div class="flex items-center justify-between mb-2">
+        <h4 class="font-semibold text-blue-700">🏠 House Rentals</h4>
+        <span class="text-lg font-bold text-blue-600">Rs {{ number_format($houseCarryForward ?? 0, 2) }}</span>
+      </div>
+      <div class="text-sm text-gray-600">
+        <div class="flex justify-between py-1">
+          <span>Current Month Billed:</span>
+          <span>Rs {{ number_format($houseBilled ?? 0, 2) }}</span>
+        </div>
+        <div class="flex justify-between py-1">
+          <span>Current Month Collected:</span>
+          <span>Rs {{ number_format($houseCollected ?? 0, 2) }}</span>
+        </div>
+        <div class="flex justify-between py-1 border-t pt-2 font-semibold">
+          <span>Previous Month Pending:</span>
+          <span class="text-blue-600">Rs {{ number_format($houseCarryForward ?? 0, 2) }}</span>
+        </div>
+      </div>
+    </div>
+    
+    {{-- Shop Carry Forward --}}
+    <div class="border rounded-lg p-4">
+      <div class="flex items-center justify-between mb-2">
+        <h4 class="font-semibold text-orange-700">🏪 Shop Rentals</h4>
+        <span class="text-lg font-bold text-orange-600">Rs {{ number_format($shopCarryForward ?? 0, 2) }}</span>
+      </div>
+      <div class="text-sm text-gray-600">
+        <div class="flex justify-between py-1">
+          <span>Current Month Billed:</span>
+          <span>Rs {{ number_format($shopBilled ?? 0, 2) }}</span>
+        </div>
+        <div class="flex justify-between py-1">
+          <span>Current Month Collected:</span>
+          <span>Rs {{ number_format($shopCollected ?? 0, 2) }}</span>
+        </div>
+        <div class="flex justify-between py-1 border-t pt-2 font-semibold">
+          <span>Previous Month Pending:</span>
+          <span class="text-orange-600">Rs {{ number_format($shopCarryForward ?? 0, 2) }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  {{-- Total Summary --}}
+  <div class="mt-4 pt-4 border-t">
+    <div class="flex justify-between items-center">
+      <span class="text-lg font-semibold">Total Carry Forward:</span>
+      <span class="text-xl font-bold text-green-600">Rs {{ number_format(($houseCarryForward ?? 0) + ($shopCarryForward ?? 0), 2) }}</span>
+    </div>
+    <div class="text-sm text-gray-600 mt-1">
+      This represents previous month pending amounts collected in {{ Carbon\Carbon::createFromFormat('Y-m', $month)->format('F Y') }}
+    </div>
+  </div>
+</div>
+{{-- Expenses and Net Summary --}}
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
   <x-stat title="Expenses (month)" :value="number_format($expenses ?? 0, 2)"/>
   <x-stat title="Cash Net (Collections - Expenses)" :value="number_format($cashNet ?? 0, 2)"/>
   <x-stat title="Entities" :value="number_format(($totalHouses ?? 0) + ($totalShops ?? 0))" subtitle="{{ number_format($totalHouses ?? 0) }} Houses → {{ number_format($totalShops ?? 0) }} Shops"/>

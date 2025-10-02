@@ -281,6 +281,10 @@ class UnifiedBillingService
         $houseCollected = $this->getHouseCollectedInMonth($from, $to);
         $shopCollected = $this->getShopCollectedInMonth($from, $to);
 
+        // Carry forward amounts (payments made in this month for previous month bills)
+        $houseCarryForward = $this->getHouseCarryForwardInMonth($from, $to, $month);
+        $shopCarryForward = $this->getShopCarryForwardInMonth($from, $to, $month);
+
         // Opening receivable (unpaid amounts at start of month)
         $houseOpeningAR = $this->getReceivableAtDate($from->copy()->subDay(), 'house');
         $shopOpeningAR = $this->getReceivableAtDate($from->copy()->subDay(), 'shop');
@@ -306,6 +310,11 @@ class UnifiedBillingService
                 'house' => $houseCollected,
                 'shop' => $shopCollected, 
                 'total' => $houseCollected + $shopCollected,
+            ],
+            'carry_forward' => [
+                'house' => $houseCarryForward,
+                'shop' => $shopCarryForward,
+                'total' => $houseCarryForward + $shopCarryForward,
             ],
             'receivable' => [
                 'opening' => [
@@ -340,15 +349,21 @@ class UnifiedBillingService
     private function getHouseCollectedInMonth(Carbon $from, Carbon $to): float
     {
         // Use customer_paid_at for when payment was actually made
-        // Use approved_at as fallback for older records
+        // Use original_payment_amount to show actual customer payments, fallback to paidAmount
         $withCustomerPaidAt = HouseRental::whereBetween('customer_paid_at', [$from, $to])
             ->whereNotNull('customer_paid_at')
-            ->sum('paidAmount');
+            ->get()
+            ->sum(function($rental) {
+                return (float)($rental->original_payment_amount ?: $rental->paidAmount);
+            });
 
         $withApprovedAt = HouseRental::whereBetween('approved_at', [$from, $to])
             ->whereNotNull('approved_at')
             ->whereNull('customer_paid_at')
-            ->sum('paidAmount');
+            ->get()
+            ->sum(function($rental) {
+                return (float)($rental->original_payment_amount ?: $rental->paidAmount);
+            });
 
         return (float)$withCustomerPaidAt + (float)$withApprovedAt;
     }
@@ -359,17 +374,57 @@ class UnifiedBillingService
     private function getShopCollectedInMonth(Carbon $from, Carbon $to): float
     {
         // Use customer_paid_at for when payment was actually made
-        // Use approved_at as fallback for older records
+        // Use original_payment_amount to show actual customer payments, fallback to paidAmount
         $withCustomerPaidAt = ShopRental::whereBetween('customer_paid_at', [$from, $to])
             ->whereNotNull('customer_paid_at')
-            ->sum('paidAmount');
+            ->get()
+            ->sum(function($rental) {
+                return (float)($rental->original_payment_amount ?: $rental->paidAmount);
+            });
 
         $withApprovedAt = ShopRental::whereBetween('approved_at', [$from, $to])
             ->whereNotNull('approved_at')
             ->whereNull('customer_paid_at')
-            ->sum('paidAmount');
+            ->get()
+            ->sum(function($rental) {
+                return (float)($rental->original_payment_amount ?: $rental->paidAmount);
+            });
 
         return (float)$withCustomerPaidAt + (float)$withApprovedAt;
+    }
+
+    /**
+     * Get house carry-forward payments for a specific month
+     * (payments made in this month for previous month bills)
+     */
+    private function getHouseCarryForwardInMonth(Carbon $from, Carbon $to, string $currentMonth): float
+    {
+        $carryForward = HouseRental::whereBetween('customer_paid_at', [$from, $to])
+            ->whereNotNull('customer_paid_at')
+            ->where('month', '<', $currentMonth)
+            ->get()
+            ->sum(function($rental) {
+                return (float)($rental->original_payment_amount ?: $rental->paidAmount);
+            });
+
+        return (float)$carryForward;
+    }
+
+    /**
+     * Get shop carry-forward payments for a specific month
+     * (payments made in this month for previous month bills)
+     */
+    private function getShopCarryForwardInMonth(Carbon $from, Carbon $to, string $currentMonth): float
+    {
+        $carryForward = ShopRental::whereBetween('customer_paid_at', [$from, $to])
+            ->whereNotNull('customer_paid_at')
+            ->where('month', '<', $currentMonth)
+            ->get()
+            ->sum(function($rental) {
+                return (float)($rental->original_payment_amount ?: $rental->paidAmount);
+            });
+
+        return (float)$carryForward;
     }
 
     /**
