@@ -239,6 +239,25 @@
             </div>
 
             <div class="breakdown-section">
+                <h3>Carry Forward Analysis</h3>
+                <div class="breakdown-item">
+                    <span>House Carry Forward</span>
+                    <span class="currency">Rs {{ number_format($house_carry_forward ?? 0, 2) }}</span>
+                </div>
+                <div class="breakdown-item">
+                    <span>Shop Carry Forward</span>
+                    <span class="currency">Rs {{ number_format($shop_carry_forward ?? 0, 2) }}</span>
+                </div>
+                <div class="breakdown-item">
+                    <span>Total Carry Forward</span>
+                    <span class="currency">Rs {{ number_format($total_carry_forward ?? 0, 2) }}</span>
+                </div>
+                <div style="margin-top: 10px; font-size: 10px; color: #666;">
+                    Payments made for previous month bills
+                </div>
+            </div>
+
+            <div class="breakdown-section">
                 <h3>Period Expenses</h3>
                 <div class="breakdown-item">
                     <span>Payroll</span>

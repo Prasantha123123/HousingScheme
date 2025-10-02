@@ -29,14 +29,15 @@
 </div>
 
 {{-- Accrual KPIs --}}
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
   <x-stat title="Billed Rentals (Accrual)" :value="number_format(($billed['total'] ?? 0),2)"/>
   <x-stat title="Outstanding Amounts" :value="number_format(($ar['closing'] ?? 0),2)"/>
   <x-stat title="Collected (Rentals)" :value="number_format(($ar['collected_rentals'] ?? 0),2)"/>
+  <x-stat title="Carry Forward" :value="number_format(($carry_forward['total'] ?? 0),2)"/>
 </div>
 
-{{-- Breakdown cards: 1-col on phones, 3-col on md+ --}}
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+{{-- Breakdown cards: 2x2 grid --}}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 mb-4">
   {{-- Income (Cash) --}}
   <div class="bg-white rounded-lg p-4">
     <h3 class="font-semibold mb-2">Income (Cash) Breakdown</h3>
@@ -66,6 +67,17 @@
       <li class="flex justify-between"><span>Shop Billed</span><span>{{ number_format($billed['shop'] ?? 0, 2) }}</span></li>
       <li class="flex justify-between font-semibold border-t pt-1"><span>Total Billed</span><span>{{ number_format($billed['total'] ?? 0, 2) }}</span></li>
     </ul>
+  </div>
+
+  {{-- Carry Forward Analysis --}}
+  <div class="bg-white rounded-lg p-4">
+    <h3 class="font-semibold mb-2">Carry Forward Analysis</h3>
+    <ul class="text-sm space-y-1">
+      <li class="flex justify-between"><span>House Carry Forward</span><span>{{ number_format($carry_forward['house'] ?? 0, 2) }}</span></li>
+      <li class="flex justify-between"><span>Shop Carry Forward</span><span>{{ number_format($carry_forward['shop'] ?? 0, 2) }}</span></li>
+      <li class="flex justify-between font-semibold border-t pt-1"><span>Total Carry Forward</span><span>{{ number_format($carry_forward['total'] ?? 0, 2) }}</span></li>
+    </ul>
+    <p class="text-xs text-gray-500 mt-2">Payments made for previous month bills</p>
   </div>
 </div>
 

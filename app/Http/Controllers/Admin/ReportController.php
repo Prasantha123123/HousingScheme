@@ -8,11 +8,18 @@ use App\Models\ShopRental;
 use App\Models\InventorySale;
 use App\Models\Payroll;
 use App\Models\Expense;
+use App\Services\UnifiedBillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class ReportController extends Controller
 {
+    private UnifiedBillingService $billingService;
+
+    public function __construct(UnifiedBillingService $billingService)
+    {
+        $this->billingService = $billingService;
+    }
     public function index(Request $r)
     {
         // Range (defaults to current month)
@@ -28,40 +35,23 @@ class ReportController extends Controller
         $fromMonth = $from->format('Y-m');
         $toMonth   = $to->format('Y-m');
 
-        // ===== CASH INCOME (collections) =====
-        // Houses: prefer approved_at; fallback to customer_paid_at
-        $houseCollectedApproved   = (float) HouseRental::whereBetween('approved_at', [$from, $to])->sum('paidAmount');
-        $houseCollectedNoApproval = (float) HouseRental::whereNull('approved_at')
-            ->whereBetween('customer_paid_at', [$from, $to])
-            ->sum('paidAmount');
-        $houseCollected = $houseCollectedApproved + $houseCollectedNoApproval;
+        // Get unified billing metrics for consistent calculations
+        $metrics = $this->billingService->getDashboardMetrics($fromMonth);
 
-        // Shops: fallback to timestamp; include money-like statuses
-        $shopCollected = (float) ShopRental::whereBetween('timestamp', [$from, $to])
-            ->whereIn('status', ['Approved', 'PartPayment', 'ExtraPayment'])
-            ->sum('paidAmount');
-
-        // Inventory sales are already cash-dated
+        // ===== INVENTORY SALES =====
         $invCollected = (float) InventorySale::whereBetween('date', [
             $from->toDateString(), $to->toDateString(),
         ])->sum('total');
 
-        $incomeTotal = $houseCollected + $shopCollected + $invCollected;
+        $incomeTotal = $metrics['collected']['total'] + $invCollected;
 
         // ===== EXPENSES (cash) =====
         $payroll      = (float) Payroll::whereBetween('timestamp', [$from, $to])->sum('wage_net');
         $otherExpense = (float) Expense::whereBetween('timestamp', [$from, $to])->sum('amount');
         $expenseTotal = $payroll + $otherExpense;
 
-        // ===== BILLED (accrual) — rentals in period =====
-        $houseBilled  = (float) HouseRental::whereBetween('month', [$fromMonth, $toMonth])->sum('billAmount');
-        $shopBilled   = (float) ShopRental::whereBetween('month', [$fromMonth, $toMonth])->sum('billAmount');
-        $billedTotal  = $houseBilled + $shopBilled;
-
         // ===== A/R Closing Balance (rentals only) =====
         // Closing A/R = outstanding amounts at the end of the period
-        
-        // Closing A/R: Sum of unpaid amounts from all months up to and including the period end
         $houseClosingAR = HouseRental::where('month', '<=', $toMonth)->get()
             ->sum(fn($r) => max(0, (float)$r->billAmount - (float)$r->paidAmount));
         $shopClosingAR = ShopRental::where('month', '<=', $toMonth)->get()
@@ -69,7 +59,7 @@ class ReportController extends Controller
         $closingAR = (float)$houseClosingAR + (float)$shopClosingAR;
 
         // Only rentals reduce AR (exclude inventory)
-        $collectedRentalsOnly = $houseCollected + $shopCollected;
+        $collectedRentalsOnly = $metrics['collected']['total'];
 
         // ===== STATUS COUNTS in the period (by billed month) =====
         $paidStatuses        = ['Approved', 'ExtraPayment'];
@@ -90,10 +80,10 @@ class ReportController extends Controller
             'from' => $from->toDateString(),
             'to'   => $to->toDateString(),
 
-            // Cash view
+            // Cash view (now includes carry forward correctly)
             'income' => [
-                'house'     => $houseCollected,
-                'shop'      => $shopCollected,
+                'house'     => $metrics['collected']['house'],
+                'shop'      => $metrics['collected']['shop'],
                 'inventory' => $invCollected,
                 'total'     => $incomeTotal,
             ],
@@ -103,11 +93,16 @@ class ReportController extends Controller
                 'total'   => $expenseTotal,
             ],
 
-            // Accrual info
+            // Accrual info (now includes proper carry forward)
             'billed' => [
-                'house' => $houseBilled,
-                'shop'  => $shopBilled,
-                'total' => $billedTotal,
+                'house' => $metrics['billed']['house'],
+                'shop'  => $metrics['billed']['shop'],
+                'total' => $metrics['billed']['total'],
+            ],
+            'carry_forward' => [
+                'house' => $metrics['carry_forward']['house'],
+                'shop'  => $metrics['carry_forward']['shop'],
+                'total' => $metrics['carry_forward']['total'],
             ],
             'ar' => [
                 'closing'           => $closingAR,

@@ -8,11 +8,18 @@ use App\Models\ShopRental;
 use App\Models\InventorySale;
 use App\Models\Payroll;
 use App\Models\Expense;
+use App\Services\UnifiedBillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
 class ReportExportController extends Controller
 {
+    private UnifiedBillingService $billingService;
+
+    public function __construct(UnifiedBillingService $billingService)
+    {
+        $this->billingService = $billingService;
+    }
 
     public function pdf(Request $r)
     {
@@ -23,20 +30,10 @@ class ReportExportController extends Controller
         $fromMonth = $from->format('Y-m');
         $toMonth   = $to->format('Y-m');
 
-        // ===== CASH INCOME (collections) =====
-        // Houses: prefer approved_at; fallback to customer_paid_at
-        $houseCollectedApproved   = (float) HouseRental::whereBetween('approved_at', [$from, $to])->sum('paidAmount');
-        $houseCollectedNoApproval = (float) HouseRental::whereNull('approved_at')
-            ->whereBetween('customer_paid_at', [$from, $to])
-            ->sum('paidAmount');
-        $houseCollected = $houseCollectedApproved + $houseCollectedNoApproval;
+        // Get unified billing metrics for consistent calculations
+        $metrics = $this->billingService->getDashboardMetrics($fromMonth);
 
-        // Shops: include money-like statuses
-        $shopCollected = (float) ShopRental::whereBetween('timestamp', [$from, $to])
-            ->whereIn('status', ['Approved', 'PartPayment', 'ExtraPayment'])
-            ->sum('paidAmount');
-
-        // Inventory sales
+        // ===== INVENTORY SALES =====
         $invCollected = (float) InventorySale::whereBetween('date', [
             $from->toDateString(), $to->toDateString(),
         ])->sum('total');
@@ -44,10 +41,6 @@ class ReportExportController extends Controller
         // ===== EXPENSES (cash) =====
         $exp_payroll  = (float) Payroll::whereBetween('timestamp', [$from, $to])->sum('wage_net');
         $exp_other    = (float) Expense::whereBetween('timestamp', [$from, $to])->sum('amount');
-
-        // ===== BILLED AMOUNTS (accrual) =====
-        $houseBilled  = (float) HouseRental::whereBetween('month', [$fromMonth, $toMonth])->sum('billAmount');
-        $shopBilled   = (float) ShopRental::whereBetween('month', [$fromMonth, $toMonth])->sum('billAmount');
 
         // ===== PENDING AMOUNTS (Outstanding) =====
         $housePending = HouseRental::where('month', '<=', $toMonth)->get()
@@ -67,11 +60,11 @@ class ReportExportController extends Controller
             'fromMonth' => $fromMonth,
             'toMonth' => $toMonth,
             
-            // Cash collections in period
-            'income_house' => $houseCollected,
-            'income_shop' => $shopCollected,
+            // Cash collections in period (now accurate with carry forward)
+            'income_house' => $metrics['collected']['house'],
+            'income_shop' => $metrics['collected']['shop'],
             'income_inv' => $invCollected,
-            'total_income' => $houseCollected + $shopCollected + $invCollected,
+            'total_income' => $metrics['collected']['total'] + $invCollected,
             
             // Expenses
             'exp_payroll' => $exp_payroll,
@@ -79,12 +72,17 @@ class ReportExportController extends Controller
             'total_expenses' => $exp_payroll + $exp_other,
             
             // Net calculation
-            'net' => ($houseCollected + $shopCollected + $invCollected) - ($exp_payroll + $exp_other),
+            'net' => ($metrics['collected']['total'] + $invCollected) - ($exp_payroll + $exp_other),
             
             // Billed amounts in period
-            'house_billed' => $houseBilled,
-            'shop_billed' => $shopBilled,
-            'total_billed' => $houseBilled + $shopBilled,
+            'house_billed' => $metrics['billed']['house'],
+            'shop_billed' => $metrics['billed']['shop'],
+            'total_billed' => $metrics['billed']['total'],
+            
+            // Carry forward amounts (NEW)
+            'house_carry_forward' => $metrics['carry_forward']['house'],
+            'shop_carry_forward' => $metrics['carry_forward']['shop'],
+            'total_carry_forward' => $metrics['carry_forward']['total'],
             
             // Pending amounts (outstanding)
             'house_pending' => $housePending,
