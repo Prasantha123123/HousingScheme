@@ -11,7 +11,24 @@ use Carbon\Carbon;
  * Unified Billing Service for Houses and Shop Rentals
  *
  * Minimal fix: carry-forward totals now detect allocations posted this month
- * even when only approved_at/updated_at was set (customer_paid_at missing).
+ * even when only approved_at/upda    private function getHouseCollectedInMonth(Carbon $from, Carbon $to): float
+    {
+        // Get unique payments made in this month - sum by customer payment events, not by bill records
+        // This prevents double counting when payments are allocated across multiple bills
+        $totalCollected = HouseRental::where(function($query) use ($from, $to) {
+                $query->whereBetween('customer_paid_at', [$from, $to])
+                      ->orWhereBetween('approved_at', [$from, $to]);
+            })
+            ->whereNotNull('original_payment_amount')
+            ->where('original_payment_amount', '>', 0)
+            // Group by house and month to get unique payment transactions
+            ->selectRaw('houseNo, MAX(original_payment_amount) as payment_amount')
+            ->groupBy('houseNo', 'month')
+            ->get()
+            ->sum('payment_amount');
+
+        return (float)$totalCollected;
+    }ustomer_paid_at missing).
  */
 class UnifiedBillingService
 {
@@ -329,14 +346,19 @@ class UnifiedBillingService
      */
     private function getHouseCollectedInMonth(Carbon $from, Carbon $to): float
     {
-        // Get bills that have payments in this specific month using original_payment_amount
+        // Get unique payments made in this month - avoid double counting when payments span multiple bills
+        // Sum the actual payment amounts rather than allocated amounts
         $totalCollected = HouseRental::where(function($query) use ($from, $to) {
                 $query->whereBetween('customer_paid_at', [$from, $to])
                       ->orWhereBetween('approved_at', [$from, $to]);
             })
             ->whereNotNull('original_payment_amount')
             ->where('original_payment_amount', '>', 0)
-            ->sum('original_payment_amount');
+            // Take only the largest payment per house to avoid double counting
+            ->selectRaw('houseNo, MAX(original_payment_amount) as max_payment')
+            ->groupBy('houseNo')
+            ->get()
+            ->sum('max_payment');
 
         return (float)$totalCollected;
     }
@@ -386,14 +408,18 @@ class UnifiedBillingService
      */
     private function getShopCollectedInMonth(Carbon $from, Carbon $to): float
     {
-        // Get bills that have payments in this specific month using original_payment_amount
+        // Get unique payments made in this month - avoid double counting when payments span multiple bills
         $totalCollected = ShopRental::where(function($query) use ($from, $to) {
                 $query->whereBetween('customer_paid_at', [$from, $to])
                       ->orWhereBetween('approved_at', [$from, $to]);
             })
             ->whereNotNull('original_payment_amount')
             ->where('original_payment_amount', '>', 0)
-            ->sum('original_payment_amount');
+            // Take only the largest payment per shop to avoid double counting
+            ->selectRaw('shopNumber, MAX(original_payment_amount) as max_payment')
+            ->groupBy('shopNumber')
+            ->get()
+            ->sum('max_payment');
 
         return (float)$totalCollected;
     }
