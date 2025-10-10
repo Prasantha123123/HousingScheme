@@ -223,6 +223,18 @@ class Stringable implements JsonSerializable, ArrayAccess, BaseStringable
     }
 
     /**
+     * Determine if a given string doesn't contain a given substring.
+     *
+     * @param  string|iterable<string>  $needles
+     * @param  bool  $ignoreCase
+     * @return bool
+     */
+    public function doesntContain($needles, $ignoreCase = false)
+    {
+        return Str::doesntContain($this->value, $needles, $ignoreCase);
+    }
+
+    /**
      * Convert the case of a string.
      *
      * @param  int  $mode
@@ -1045,7 +1057,7 @@ class Stringable implements JsonSerializable, ArrayAccess, BaseStringable
     /**
      * Trim the string of the given characters.
      *
-     * @param  string  $characters
+     * @param  string|null  $characters
      * @return static
      */
     public function trim($characters = null)
@@ -1056,7 +1068,7 @@ class Stringable implements JsonSerializable, ArrayAccess, BaseStringable
     /**
      * Left trim the string of the given characters.
      *
-     * @param  string  $characters
+     * @param  string|null  $characters
      * @return static
      */
     public function ltrim($characters = null)
@@ -1067,7 +1079,7 @@ class Stringable implements JsonSerializable, ArrayAccess, BaseStringable
     /**
      * Right trim the string of the given characters.
      *
-     * @param  string  $characters
+     * @param  string|null  $characters
      * @return static
      */
     public function rtrim($characters = null)
