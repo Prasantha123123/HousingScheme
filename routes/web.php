@@ -66,6 +66,7 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/houses/{houseNo}', [App\Http\Controllers\Admin\HouseController::class, 'destroy'])->name('houses.destroy');
         // House Bills (HouseRental)
         Route::get('/house-bills', [App\Http\Controllers\Admin\HouseBillController::class, 'index'])->name('house-bills.index');
+        Route::get('/house-bills/{id}', [App\Http\Controllers\Admin\HouseBillController::class, 'show'])->name('house-bills.show');
         Route::get('/house-bills/pdf', [App\Http\Controllers\Admin\HouseBillController::class, 'downloadPdf'])->name('house-bills.pdf');
         Route::post('/house-bills/generate', [App\Http\Controllers\Admin\HouseBillController::class, 'generate'])->name('house-bills.generate');
         Route::post('/house-bills/{id}/approve', [App\Http\Controllers\Admin\HouseBillApproveController::class, 'approve'])->name('house-bills.approve');
@@ -147,7 +148,7 @@ Route::middleware(['auth:house'])->prefix('house')->as('house.')->group(function
         $house = auth('house')->user();
         return view('house.dashboard', compact('house'));
     })->name('dashboard');
-    
+
     // House Bills - using dedicated controller
     Route::get('/bills', [HouseBillController::class, 'index'])->name('bills');
     Route::post('/bills/{id}/pay/transfer', [HouseBillPayController::class, 'transfer'])->name('bills.pay.transfer');
@@ -160,7 +161,7 @@ Route::middleware(['auth:shop'])->prefix('shop')->as('shop.')->group(function ()
         $shop = auth('shop')->user();
         return view('shop.dashboard', compact('shop'));
     })->name('dashboard');
-    
+
     // Shop Rentals - using dedicated controller
     Route::get('/rentals', [ShopRentalController::class, 'index'])->name('rentals');
     Route::post('/rentals/{id}/pay/transfer', [ShopRentalPayController::class, 'transfer'])->name('rentals.pay.transfer');

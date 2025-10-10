@@ -41,6 +41,7 @@ class HouseBillController extends Controller
             ->when($request->filled('houseNo'), fn($q) => $q->where('houseNo', $request->string('houseNo')))
             ->when($request->filled('method'), fn($q) => $q->where('paymentMethod', $request->string('method')))
             ->orderByDesc('timestamp')
+            ->orderBy('houseNo')
             ->paginate(15)
             ->withQueryString();
 
@@ -57,6 +58,37 @@ class HouseBillController extends Controller
     }
 
     /**
+     * Show individual bill details
+     */
+    public function show($id)
+    {
+        $bill = HouseRental::with(['payments', 'house'])->findOrFail($id);
+
+        // Calculate usage and other details
+        $usage = max(0, ($bill->readingUnit - $bill->openingReadingUnit));
+        $balance = max(0, (float)$bill->billAmount - (float)$bill->paidAmount);
+
+        // Get settings for calculations
+        $unitPrice = (float) Setting::get('water_unit_price', 0);
+        $sewerage = (float) Setting::get('sewerage_charge', 0);
+        $service = (float) Setting::get('service_charge', 0);
+
+        // Calculate total due amount
+        $totalDue = $this->billingService->getMaxPayableAmount('house', $bill->houseNo, $bill->month);
+        $maxPayable = max(0, $totalDue - (float)$bill->paidAmount);
+
+        return response()->json([
+            'bill' => $bill,
+            'usage' => $usage,
+            'balance' => $balance,
+            'unitPrice' => $unitPrice,
+            'sewerage' => $sewerage,
+            'service' => $service,
+            'maxPayable' => $maxPayable,
+        ]);
+    }
+
+    /**
      * Generate bills for every house for the given month.
      * billAmount = sewerage + service + usage * unitPrice  (THIS MONTH ONLY)
      */
@@ -66,6 +98,8 @@ class HouseBillController extends Controller
         $unitPrice = (float) Setting::get('water_unit_price', 0);
         $sewerage  = (float) Setting::get('sewerage_charge', 0);
         $service   = (float) Setting::get('service_charge', 0);
+
+        $billsGenerated = 0;
 
         foreach (House::all(['houseNo']) as $h) {
             if (HouseRental::where('houseNo', $h->houseNo)->where('month', $month)->exists()) {
@@ -106,13 +140,20 @@ class HouseBillController extends Controller
                 'timestamp'          => now(),
             ]);
 
+            $billsGenerated++;
+
             if ($reading && $reading->status !== 'Approved') {
                 $reading->status = 'Approved';
                 $reading->save();
             }
         }
 
-        return back()->with('success', "Bills generated for {$month}");
+        $message = $billsGenerated > 0
+            ? "Successfully generated {$billsGenerated} bills for {$month}. Showing all bills."
+            : "No new bills generated for {$month}. All bills may already exist for this month.";
+
+        return redirect()->route('admin.house-bills.index')
+            ->with('success', $message);
     }
 
     /**
@@ -177,12 +218,12 @@ class HouseBillController extends Controller
         $filtersText = empty($filters) ? 'All Records' : implode(', ', $filters);
 
         $pdf = Pdf::loadView('admin.house_bills.pdf', compact(
-            'bills', 'unitPrice', 'sewerage', 'service', 
+            'bills', 'unitPrice', 'sewerage', 'service',
             'totalBillAmount', 'totalPaidAmount', 'totalBalance', 'filtersText'
         ))->setPaper('a4', 'landscape');
 
         $filename = 'house-bills-' . now()->format('Y-m-d-H-i-s') . '.pdf';
-        
+
         return $pdf->download($filename);
     }
 }
