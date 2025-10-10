@@ -37,6 +37,11 @@ class ReportController extends Controller
 
         // Get unified billing metrics for consistent calculations
         $metrics = $this->billingService->getDashboardMetrics($fromMonth);
+        
+        // Get enhanced payment metrics
+        $paymentMethods = $this->billingService->getPaymentMethodBreakdown($fromMonth);
+        $paymentTypes = $this->billingService->getPaymentTypeBreakdown($fromMonth);
+        $pendingPayments = $this->billingService->getPendingPaymentsStats($fromMonth);
 
         // ===== INVENTORY SALES =====
         $invCollected = (float) InventorySale::whereBetween('date', [
@@ -125,6 +130,11 @@ class ReportController extends Controller
                     'unpaid' => $shopUnpaidCount,
                 ],
             ],
+            
+            // Enhanced payment metrics
+            'paymentMethods' => $paymentMethods,
+            'paymentTypes' => $paymentTypes,
+            'pendingPayments' => $pendingPayments,
         ]);
     }
 }

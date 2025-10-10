@@ -106,4 +106,86 @@
     </ul>
   </div>
 </div>
+
+{{-- Enhanced Payment Analytics --}}
+<div class="bg-white rounded-lg p-6 mb-6 border">
+  <h2 class="text-xl font-semibold mb-4">💳 Payment Analytics</h2>
+  
+  {{-- Pending Payments Alert --}}
+  @if(($pendingPayments['total']['count'] ?? 0) > 0)
+  <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+    <div class="flex">
+      <div class="ml-3">
+        <h3 class="text-sm font-medium text-yellow-800">
+          ⚠️ {{ $pendingPayments['total']['count'] }} Payment(s) Pending Approval
+        </h3>
+        <div class="mt-1 text-sm text-yellow-700">
+          Total: Rs {{ number_format($pendingPayments['total']['amount'], 2) }}
+        </div>
+      </div>
+    </div>
+  </div>
+  @endif
+
+  {{-- Payment Methods Grid --}}
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    @foreach(['cash' => '💵', 'card' => '💳', 'online' => '🌐'] as $method => $icon)
+    <div class="border rounded-lg p-4">
+      <div class="text-sm text-gray-600 mb-1">{{ $icon }} {{ ucfirst($method) }}</div>
+      <div class="text-2xl font-bold text-gray-900 mb-2">
+        Rs {{ number_format($paymentMethods[$method]['total']['amount'] ?? 0, 2) }}
+      </div>
+      <div class="text-xs text-gray-600">
+        {{ ($paymentMethods[$method]['total']['count'] ?? 0) }} transactions
+      </div>
+      <div class="mt-2 pt-2 border-t text-xs space-y-1">
+        <div class="flex justify-between">
+          <span>Houses:</span>
+          <span>Rs {{ number_format($paymentMethods[$method]['house']['amount'] ?? 0, 2) }}</span>
+        </div>
+        <div class="flex justify-between">
+          <span>Shops:</span>
+          <span>Rs {{ number_format($paymentMethods[$method]['shop']['amount'] ?? 0, 2) }}</span>
+        </div>
+      </div>
+    </div>
+    @endforeach
+  </div>
+
+  {{-- Payment Types --}}
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    @foreach(['fullpayment' => ['label' => 'Full Payments', 'color' => 'green', 'icon' => '✅'], 
+              'partpayment' => ['label' => 'Partial Payments', 'color' => 'orange', 'icon' => '⚠️']] as $type => $config)
+    <div class="border rounded-lg p-4">
+      <div class="text-sm text-{{ $config['color'] }}-600 font-medium mb-1">
+        {{ $config['icon'] }} {{ $config['label'] }}
+      </div>
+      <div class="text-2xl font-bold text-{{ $config['color'] }}-700 mb-2">
+        Rs {{ number_format($paymentTypes[$type]['total']['amount'] ?? 0, 2) }}
+      </div>
+      <div class="text-xs text-gray-600 mb-2">
+        {{ ($paymentTypes[$type]['total']['count'] ?? 0) }} payments
+      </div>
+      <div class="text-xs space-y-1">
+        <div class="flex justify-between">
+          <span>Houses:</span>
+          <span class="font-medium">
+            {{ ($paymentTypes[$type]['house']['count'] ?? 0) }} payments
+            (Rs {{ number_format($paymentTypes[$type]['house']['amount'] ?? 0, 2) }})
+          </span>
+        </div>
+        <div class="flex justify-between">
+          <span>Shops:</span>
+          <span class="font-medium">
+            {{ ($paymentTypes[$type]['shop']['count'] ?? 0) }} payments
+            (Rs {{ number_format($paymentTypes[$type]['shop']['amount'] ?? 0, 2) }})
+          </span>
+        </div>
+      </div>
+    </div>
+    @endforeach
+  </div>
+</div>
+
 @endsection
+

@@ -26,8 +26,8 @@
   $runningOut = 0;
 
   foreach ($bills->getCollection()->sortBy('month') as $row) {
-      $usage   = max(0, $row->readingUnit - $row->openingReadingUnit);
-      $current = $sewerage + $service + ($usage * $unitPrice);
+      // Use stored billAmount instead of recalculating from water readings
+      $current = (float) $row->billAmount;
       $carry   = $runningOut;
       $total   = $carry + $current;
 
@@ -45,9 +45,9 @@
 @if($bills->count() > 0)
   @foreach($bills as $b)
     @php
-      $usage = max(0, $b->readingUnit - $b->openingReadingUnit);
+      $usage = max(0, $b->readingUnit - $b->openingReading);
       $carry = $calc[$b->id]['carry']  ?? 0;
-      $total = $calc[$b->id]['total']  ?? ($sewerage + $service + $usage * $unitPrice);
+      $total = $calc[$b->id]['total']  ?? (float) $b->billAmount;
       $paid  = (float) $b->paidAmount;
       $balanceThisRow = max(0, $total - $paid);
       $outstanding = number_format($balanceThisRow, 2, '.', ''); // ✅ default for input

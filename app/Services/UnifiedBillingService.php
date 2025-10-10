@@ -197,22 +197,14 @@ class UnifiedBillingService
 
     /**
      * Get house collections for a specific month by payment timestamps
+     * Updated to use housePayment table for accurate tracking
      */
     private function getHouseCollectedInMonth(Carbon $from, Carbon $to): float
     {
-        // Get unique payments made in this month - avoid double counting when payments span multiple bills
-        // Sum the actual payment amounts rather than allocated amounts
-        $totalCollected = HouseRental::where(function($query) use ($from, $to) {
-                $query->whereBetween('customer_paid_at', [$from, $to])
-                      ->orWhereBetween('approved_at', [$from, $to]);
-            })
-            ->whereNotNull('original_payment_amount')
-            ->where('original_payment_amount', '>', 0)
-            // Take only the largest payment per house to avoid double counting
-            ->selectRaw('houseNo, MAX(original_payment_amount) as max_payment')
-            ->groupBy('houseNo')
-            ->get()
-            ->sum('max_payment');
+        // Use the new housePayment table for accurate collection tracking
+        $totalCollected = \App\Models\HousePayment::whereBetween('customerPaidAt', [$from, $to])
+            ->where('status', 'approval') // Only count approved payments
+            ->sum('paymentmake');
 
         return (float)$totalCollected;
     }
@@ -259,21 +251,14 @@ class UnifiedBillingService
 
     /**
      * Get shop collections for a specific month by payment timestamps
+     * Updated to use shopPayment table for accurate tracking
      */
     private function getShopCollectedInMonth(Carbon $from, Carbon $to): float
     {
-        // Get unique payments made in this month - avoid double counting when payments span multiple bills
-        $totalCollected = ShopRental::where(function($query) use ($from, $to) {
-                $query->whereBetween('customer_paid_at', [$from, $to])
-                      ->orWhereBetween('approved_at', [$from, $to]);
-            })
-            ->whereNotNull('original_payment_amount')
-            ->where('original_payment_amount', '>', 0)
-            // Take only the largest payment per shop to avoid double counting
-            ->selectRaw('shopNumber, MAX(original_payment_amount) as max_payment')
-            ->groupBy('shopNumber')
-            ->get()
-            ->sum('max_payment');
+        // Use the new shopPayment table for accurate collection tracking
+        $totalCollected = \App\Models\ShopPayment::whereBetween('customerPaidAt', [$from, $to])
+            ->where('status', 'approval') // Only count approved payments
+            ->sum('paymentmake');
 
         return (float)$totalCollected;
     }
@@ -591,18 +576,14 @@ class UnifiedBillingService
                 ->where('month', '<=', $month)
                 ->orderBy('month')
                 ->get();
-                
-            // Calculate total due amount using same logic as frontend
-            $unitPrice = (float) \App\Models\Setting::get('water_unit_price', 0);
-            $sewerage  = (float) \App\Models\Setting::get('sewerage_charge', 0);
-            $service   = (float) \App\Models\Setting::get('service_charge', 0);
             
             $runningCarry = 0;
             $totalDue = 0;
             
             foreach ($bills as $bill) {
-                $usage = max(0, $bill->readingUnit - $bill->openingReading);
-                $current = $sewerage + $service + ($usage * $unitPrice);
+                // Use the stored billAmount instead of recalculating
+                // This ensures consistency with the actual bill that was generated
+                $current = (float) $bill->billAmount;
                 $total = $runningCarry + $current;
                 $paid = (float) $bill->paidAmount;
                 
@@ -642,4 +623,188 @@ class UnifiedBillingService
             return 0;
         }
     }
+
+    /**
+     * Get pending payments statistics (payments awaiting approval)
+     */
+    public function getPendingPaymentsStats(string $month): array
+    {
+        [$year, $monthNum] = explode('-', $month);
+        $from = Carbon::create($year, $monthNum, 1)->startOfDay();
+        $to = (clone $from)->endOfMonth();
+
+        // House pending payments
+        $housePendingPayments = \App\Models\HousePayment::whereIn('status', ['pending', 'inprogress'])
+            ->whereBetween('customerPaidAt', [$from, $to])
+            ->get();
+
+        $housePendingCount = $housePendingPayments->count();
+        $housePendingAmount = $housePendingPayments->sum('paymentmake');
+
+        // Shop pending payments
+        $shopPendingPayments = \App\Models\ShopPayment::whereIn('status', ['pending', 'inprogress'])
+            ->whereBetween('customerPaidAt', [$from, $to])
+            ->get();
+
+        $shopPendingCount = $shopPendingPayments->count();
+        $shopPendingAmount = $shopPendingPayments->sum('paymentmake');
+
+        return [
+            'house' => [
+                'count' => $housePendingCount,
+                'amount' => (float)$housePendingAmount,
+            ],
+            'shop' => [
+                'count' => $shopPendingCount,
+                'amount' => (float)$shopPendingAmount,
+            ],
+            'total' => [
+                'count' => $housePendingCount + $shopPendingCount,
+                'amount' => (float)$housePendingAmount + (float)$shopPendingAmount,
+            ],
+        ];
+    }
+
+    /**
+     * Get payment method breakdown for the month
+     */
+    public function getPaymentMethodBreakdown(string $month): array
+    {
+        [$year, $monthNum] = explode('-', $month);
+        $from = Carbon::create($year, $monthNum, 1)->startOfDay();
+        $to = (clone $from)->endOfMonth();
+
+        // House payments by method
+        $housePayments = \App\Models\HousePayment::whereBetween('customerPaidAt', [$from, $to])
+            ->where('status', 'approval')
+            ->selectRaw('method, SUM(paymentmake) as total, COUNT(*) as count')
+            ->groupBy('method')
+            ->get()
+            ->keyBy('method');
+
+        // Shop payments by method
+        $shopPayments = \App\Models\ShopPayment::whereBetween('customerPaidAt', [$from, $to])
+            ->where('status', 'approval')
+            ->selectRaw('method, SUM(paymentmake) as total, COUNT(*) as count')
+            ->groupBy('method')
+            ->get()
+            ->keyBy('method');
+
+        $methods = ['cash', 'card', 'online'];
+        $breakdown = [];
+
+        foreach ($methods as $method) {
+            $houseData = $housePayments->get($method);
+            $shopData = $shopPayments->get($method);
+
+            $breakdown[$method] = [
+                'house' => [
+                    'count' => $houseData->count ?? 0,
+                    'amount' => (float)($houseData->total ?? 0),
+                ],
+                'shop' => [
+                    'count' => $shopData->count ?? 0,
+                    'amount' => (float)($shopData->total ?? 0),
+                ],
+                'total' => [
+                    'count' => ($houseData->count ?? 0) + ($shopData->count ?? 0),
+                    'amount' => (float)($houseData->total ?? 0) + (float)($shopData->total ?? 0),
+                ],
+            ];
+        }
+
+        return $breakdown;
+    }
+
+    /**
+     * Get payment type breakdown (full vs partial payments)
+     */
+    public function getPaymentTypeBreakdown(string $month): array
+    {
+        [$year, $monthNum] = explode('-', $month);
+        $from = Carbon::create($year, $monthNum, 1)->startOfDay();
+        $to = (clone $from)->endOfMonth();
+
+        // House payments by type
+        $housePayments = \App\Models\HousePayment::whereBetween('customerPaidAt', [$from, $to])
+            ->where('status', 'approval')
+            ->selectRaw('paymenttype, SUM(paymentmake) as total, COUNT(*) as count')
+            ->groupBy('paymenttype')
+            ->get()
+            ->keyBy('paymenttype');
+
+        // Shop payments by type
+        $shopPayments = \App\Models\ShopPayment::whereBetween('customerPaidAt', [$from, $to])
+            ->where('status', 'approval')
+            ->selectRaw('paymenttype, SUM(paymentmake) as total, COUNT(*) as count')
+            ->groupBy('paymenttype')
+            ->get()
+            ->keyBy('paymenttype');
+
+        $types = ['fullpayment', 'partpayment'];
+        $breakdown = [];
+
+        foreach ($types as $type) {
+            $houseData = $housePayments->get($type);
+            $shopData = $shopPayments->get($type);
+
+            $breakdown[$type] = [
+                'house' => [
+                    'count' => $houseData->count ?? 0,
+                    'amount' => (float)($houseData->total ?? 0),
+                ],
+                'shop' => [
+                    'count' => $shopData->count ?? 0,
+                    'amount' => (float)($shopData->total ?? 0),
+                ],
+                'total' => [
+                    'count' => ($houseData->count ?? 0) + ($shopData->count ?? 0),
+                    'amount' => (float)($houseData->total ?? 0) + (float)($shopData->total ?? 0),
+                ],
+            ];
+        }
+
+        return $breakdown;
+    }
+
+    /**
+     * Get recent payment activity
+     */
+    public function getRecentPayments(int $limit = 10): array
+    {
+        $housePayments = \App\Models\HousePayment::with('houseRental')
+            ->where('status', 'approval')
+            ->latest('approvedAt')
+            ->take($limit)
+            ->get()
+            ->map(fn($p) => [
+                'type' => 'House',
+                'entity' => $p->houseRental->houseNo ?? 'N/A',
+                'amount' => (float)$p->paymentmake,
+                'method' => $p->method,
+                'date' => $p->approvedAt,
+                'payment_type' => $p->paymenttype,
+            ]);
+
+        $shopPayments = \App\Models\ShopPayment::with('shopRental')
+            ->where('status', 'approval')
+            ->latest('approvedAt')
+            ->take($limit)
+            ->get()
+            ->map(fn($p) => [
+                'type' => 'Shop',
+                'entity' => $p->shopRental->shopNumber ?? 'N/A',
+                'amount' => (float)$p->paymentmake,
+                'method' => $p->method,
+                'date' => $p->approvedAt,
+                'payment_type' => $p->paymenttype,
+            ]);
+
+        return $housePayments->merge($shopPayments)
+            ->sortByDesc('date')
+            ->take($limit)
+            ->values()
+            ->toArray();
+    }
 }
+

@@ -110,7 +110,7 @@ class ShopRentalController extends Controller
     public function downloadPdf(Request $request)
     {
         // Use the same filtering logic as the index method but without pagination
-        $rows = ShopRental::with(['shop.merchant:id,name'])
+        $rows = ShopRental::with(['shop.merchant:id,name', 'payments'])
             ->when($request->filled('month'), fn ($q) => $q->where('month', $request->string('month')))
             ->when($request->filled('from_date') && $request->filled('to_date'), function($q) use ($request) {
                 $fromDate = $request->date('from_date');

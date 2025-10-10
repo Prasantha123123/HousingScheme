@@ -180,6 +180,7 @@ class HouseBillController extends Controller
             ->when($request->filled('status'), fn($q) => $q->where('status', $request->string('status')))
             ->when($request->filled('houseNo'), fn($q) => $q->where('houseNo', $request->string('houseNo')))
             ->when($request->filled('method'), fn($q) => $q->where('paymentMethod', $request->string('method')))
+            ->with('payments') // Load payment records
             ->orderByDesc('timestamp')
             ->get();
 

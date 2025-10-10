@@ -66,8 +66,8 @@ Route::middleware(['auth'])->group(function () {
         Route::delete('/houses/{houseNo}', [App\Http\Controllers\Admin\HouseController::class, 'destroy'])->name('houses.destroy');
         // House Bills (HouseRental)
         Route::get('/house-bills', [App\Http\Controllers\Admin\HouseBillController::class, 'index'])->name('house-bills.index');
-        Route::get('/house-bills/{id}', [App\Http\Controllers\Admin\HouseBillController::class, 'show'])->name('house-bills.show');
         Route::get('/house-bills/pdf', [App\Http\Controllers\Admin\HouseBillController::class, 'downloadPdf'])->name('house-bills.pdf');
+        Route::get('/house-bills/{id}', [App\Http\Controllers\Admin\HouseBillController::class, 'show'])->name('house-bills.show');
         Route::post('/house-bills/generate', [App\Http\Controllers\Admin\HouseBillController::class, 'generate'])->name('house-bills.generate');
         Route::post('/house-bills/{id}/approve', [App\Http\Controllers\Admin\HouseBillApproveController::class, 'approve'])->name('house-bills.approve');
         Route::post('/house-bills/{id}/reject', [App\Http\Controllers\Admin\HouseBillApproveController::class, 'reject'])->name('house-bills.reject');

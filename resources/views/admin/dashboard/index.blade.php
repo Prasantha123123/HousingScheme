@@ -80,6 +80,17 @@
           <span>Previous Month Pending:</span>
           <span class="text-blue-600">Rs {{ number_format($housePreviousMonthPending ?? 0, 2) }}</span>
         </div>
+        @php
+          $housePreviousCollected = max(0, floatval($houseCollected ?? 0) - floatval($houseBilled ?? 0));
+        @endphp
+        <div class="flex justify-between py-1 {{ $housePreviousCollected > 0 ? 'bg-green-50' : 'bg-gray-50' }} px-2 rounded mt-2">
+          <span class="{{ $housePreviousCollected > 0 ? 'text-green-700' : 'text-gray-600' }} font-semibold">
+            {{ $housePreviousCollected > 0 ? '✓' : '•' }} Previous Pending Collected:
+          </span>
+          <span class="{{ $housePreviousCollected > 0 ? 'text-green-700' : 'text-gray-600' }} font-bold">
+            Rs {{ number_format($housePreviousCollected, 2) }}
+          </span>
+        </div>
       </div>
     </div>
     
@@ -101,6 +112,17 @@
         <div class="flex justify-between py-1 border-t pt-2 font-semibold">
           <span>Previous Month Pending:</span>
           <span class="text-orange-600">Rs {{ number_format($shopPreviousMonthPending ?? 0, 2) }}</span>
+        </div>
+        @php
+          $shopPreviousCollected = max(0, floatval($shopCollected ?? 0) - floatval($shopBilled ?? 0));
+        @endphp
+        <div class="flex justify-between py-1 {{ $shopPreviousCollected > 0 ? 'bg-green-50' : 'bg-gray-50' }} px-2 rounded mt-2">
+          <span class="{{ $shopPreviousCollected > 0 ? 'text-green-700' : 'text-gray-600' }} font-semibold">
+            {{ $shopPreviousCollected > 0 ? '✓' : '•' }} Previous Pending Collected:
+          </span>
+          <span class="{{ $shopPreviousCollected > 0 ? 'text-green-700' : 'text-gray-600' }} font-bold">
+            Rs {{ number_format($shopPreviousCollected, 2) }}
+          </span>
         </div>
       </div>
     </div>
@@ -181,57 +203,8 @@
   </div>
 </div>
 
-{{-- Latest 10 Pending (Pending, InProgress, PartPayment) --}}
-<div class="bg-white rounded-lg p-4">
-  <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-    <h3 class="font-semibold">Latest 10 Pending / In Progress</h3>
-  </div>
+{{-- Enhanced Payment Metrics Section --}}
+@include('admin.dashboard.partials._payment_metrics')
 
-  {{-- Mobile: cards --}}
-  <div class="sm:hidden space-y-3">
-    @forelse(($latestPending ?? []) as $p)
-      <div class="rounded-lg border p-3">
-        <div class="flex items-center justify-between">
-          <span class="text-sm font-medium">{{ $p['type'] }}</span>
-          <span class="text-sm text-gray-600">{{ $p['month'] }}</span>
-        </div>
-        <div class="mt-1 text-sm text-gray-700">
-          @if(($p['type'] ?? '') === 'House')
-            House: <span class="font-medium">{{ $p['houseNo'] }}</span>
-          @else
-            Shop: <span class="font-medium">{{ $p['shopNumber'] }}</span>
-          @endif
-        </div>
-        <div class="mt-2 text-right font-semibold">
-          {{ number_format($p['amount'] ?? 0, 2) }}
-        </div>
-      </div>
-    @empty
-      <div class="rounded-lg border p-4 text-gray-500">No pending items</div>
-    @endforelse
-  </div>
-
-  {{-- Tablet / Desktop: table --}}
-  <div class="hidden sm:block overflow-x-auto -mx-4 md:mx-0">
-    <x-table>
-      <x-slot:head>
-        <th class="px-3 py-2 text-left">Type</th>
-        <th class="px-3 py-2 text-left">Ref</th>
-        <th class="px-3 py-2 text-right">Amount</th>
-      </x-slot:head>
-
-      @forelse(($latestPending ?? []) as $p)
-        <tr class="hover:bg-gray-50">
-          <td class="px-3 py-2">{{ $p['type'] }}</td>
-          <td class="px-3 py-2">
-            {{ $p['type']=='House' ? $p['houseNo'] : $p['shopNumber'] }} → {{ $p['month'] }}
-          </td>
-          <td class="px-3 py-2 text-right">{{ number_format($p['amount'],2) }}</td>
-        </tr>
-      @empty
-        <tr><td class="px-3 py-6 text-gray-500" colspan="3">No pending items</td></tr>
-      @endforelse
-    </x-table>
-  </div>
-</div>
 @endsection
+

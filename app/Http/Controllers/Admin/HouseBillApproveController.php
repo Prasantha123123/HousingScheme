@@ -114,6 +114,55 @@ class HouseBillApproveController extends Controller
             /** @var HouseRental $bill */
             $bill = HouseRental::lockForUpdate()->findOrFail($id);
 
+            // For cash payments, allow paying all unpaid bills for this house (across all months)
+            if ($data['paymentMethod'] === 'cash') {
+                // Get all unpaid bills for this house (all months)
+                $unpaidBills = HouseRental::where('houseNo', $bill->houseNo)
+                    ->where('status', '!=', 'Approved')
+                    ->whereRaw('billAmount > paidAmount')
+                    ->orderBy('month', 'asc') // Pay oldest first
+                    ->lockForUpdate()
+                    ->get();
+
+                $totalProcessed = 0;
+                $totalAmountPaid = 0;
+                $paidAmount = array_key_exists('paidAmount', $data) && $data['paidAmount'] !== null 
+                    ? (float)$data['paidAmount'] 
+                    : $unpaidBills->sum(fn($b) => (float)$b->billAmount - (float)$b->paidAmount);
+
+                $remainingCash = $paidAmount;
+
+                foreach ($unpaidBills as $houseBill) {
+                    if ($remainingCash <= 0) break;
+                    
+                    $billBalance = (float)$houseBill->billAmount - (float)$houseBill->paidAmount;
+                    $paymentAmount = min($billBalance, $remainingCash);
+                    
+                    if ($paymentAmount > 0) {
+                        // Use new payment service for admin-initiated payment
+                        $payment = $this->paymentService->make('house', $houseBill->id, [
+                            'amount' => $paymentAmount,
+                            'method' => $data['paymentMethod'],
+                            'receipt' => null,
+                            'isCustomerFlow' => false // Admin payment, auto-approve
+                        ]);
+                        
+                        // Immediately approve the payment
+                        $this->paymentService->approve('house', $payment->id);
+                        $totalProcessed++;
+                        $totalAmountPaid += $paymentAmount;
+                        $remainingCash -= $paymentAmount;
+                    }
+                }
+
+                $message = "Successfully processed {$totalProcessed} bills for {$bill->houseNo} with Rs " . number_format($totalAmountPaid, 2) . " cash payment.";
+                if ($remainingCash > 0) {
+                    $message .= " (Excess: Rs " . number_format($remainingCash, 2) . ")";
+                }
+                
+                return back()->with('success', $message);
+            }
+
             // Must be the latest outstanding bill for this house
             $latestOpen = HouseRental::where('houseNo', $bill->houseNo)
                 ->where('status', '!=', 'Approved')
@@ -138,20 +187,24 @@ class HouseBillApproveController extends Controller
             // Use explicit amount if provided; else auto-fill based on payment method and current state
             if (array_key_exists('paidAmount', $data) && $data['paidAmount'] !== null) {
                 // Admin entered a specific amount - this could be either:
-                // 1. Total payment amount (if equals billAmount)
-                // 2. Additional payment amount (if less than billAmount)
+                // 1. Total payment amount (if equals or exceeds billAmount)
+                // 2. Additional payment amount (if less than remaining balance)
                 $adminAmount = (float)$data['paidAmount'];
                 $currentPaid = (float)$bill->paidAmount;
                 $billAmount = (float)$bill->billAmount;
+                $remainingBalance = $billAmount - $currentPaid;
                 
                 // Determine if admin entered total amount or additional amount
-                if ($adminAmount <= $billAmount && $adminAmount > $currentPaid) {
+                if ($adminAmount >= $billAmount) {
+                    // Admin entered amount >= bill amount (treat as full payment)
+                    $newPaymentAmount = $remainingBalance;
+                } elseif ($adminAmount > $currentPaid && $adminAmount < $billAmount) {
                     // Admin entered total target payment amount
                     $newPaymentAmount = $adminAmount - $currentPaid;
-                } elseif ($adminAmount <= ($billAmount - $currentPaid)) {
+                } elseif ($adminAmount > 0 && $adminAmount <= $remainingBalance) {
                     // Admin entered additional payment amount  
                     $newPaymentAmount = $adminAmount;
-                } elseif ($adminAmount == $currentPaid) {
+                } elseif (abs($adminAmount - $currentPaid) < 0.01) {
                     // Admin entered same amount as current - just approve existing payment
                     $bill->paymentMethod = $data['paymentMethod'];
                     
@@ -170,7 +223,7 @@ class HouseBillApproveController extends Controller
                     }
                     return;
                 } else {
-                    abort(422, 'Invalid payment amount. Maximum additional payment: Rs ' . number_format($billAmount - $currentPaid, 2));
+                    abort(422, 'Invalid payment amount. Bill amount: Rs ' . number_format($billAmount, 2) . ', Already paid: Rs ' . number_format($currentPaid, 2) . ', Remaining: Rs ' . number_format($remainingBalance, 2));
                 }
                 
                 // Validate new payment amount

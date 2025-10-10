@@ -269,6 +269,9 @@
           <x-badge :status="$r->status"/>
         </td>
         <td class="px-3 py-2 w-32 text-right whitespace-nowrap">
+          <button type="button" class="text-blue-600 mr-2" x-data @click="$dispatch('open-modal','view-rental-{{ $r->id }}')">
+            View
+          </button>
           @if($r->status === 'Approved')
             <button class="text-green-700 opacity-50 cursor-not-allowed" disabled>Approve</button>
           @else
@@ -347,82 +350,77 @@
         </x-modal>
       @endif
 
-      {{-- Payment History Modal --}}
-      @if($r->payments && $r->payments->count() > 0)
-        <x-modal :name="'payments-'.$r->id" :title="'Payment History - Rental #'.$r->id">
-          <div class="space-y-3">
-            <div class="text-sm text-gray-600">
-              <strong>Shop:</strong> {{ $r->shopNumber }} | <strong>Month:</strong> {{ $r->month }}
-            </div>
-            
-            <div class="overflow-x-auto">
-              <table class="w-full text-sm">
-                <thead class="bg-gray-50">
-                  <tr>
-                    <th class="px-3 py-2 text-left">Date</th>
-                    <th class="px-3 py-2 text-left">Amount</th>
-                    <th class="px-3 py-2 text-left">Method</th>
-                    <th class="px-3 py-2 text-left">Status</th>
-                    <th class="px-3 py-2 text-left">Type</th>
-                    <th class="px-3 py-2 text-left">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @foreach($r->payments->sortByDesc('customerPaidAt') as $payment)
-                    <tr class="border-b">
-                      <td class="px-3 py-2">
-                        {{ $payment->customerPaidAt ? $payment->customerPaidAt->format('M j, Y H:i') : '-' }}
-                      </td>
-                      <td class="px-3 py-2 font-medium">
-                        Rs {{ number_format($payment->paymentmake, 2) }}
-                      </td>
-                      <td class="px-3 py-2">
-                        <span class="px-2 py-1 text-xs rounded bg-gray-100">
-                          {{ ucfirst($payment->method) }}
-                        </span>
-                      </td>
-                      <td class="px-3 py-2">
-                        <span class="px-2 py-1 text-xs rounded {{ $payment->status === 'approval' ? 'bg-green-100 text-green-800' : ($payment->status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800') }}">
-                          {{ ucfirst($payment->status) }}
-                        </span>
-                      </td>
-                      <td class="px-3 py-2">
-                        <span class="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">
-                          {{ ucfirst($payment->paymenttype) }}
-                        </span>
-                      </td>
-                      <td class="px-3 py-2">
-                        @if($payment->recipt)
-                          <a href="{{ asset('storage/' . $payment->recipt) }}" target="_blank" 
-                             class="text-blue-600 hover:underline text-xs">Receipt</a>
-                        @endif
-                        @if($payment->status === 'pending')
-                          <form method="post" action="{{ route('admin.shop-rentals.approve', $r->id) }}" class="inline ml-2">
-                            @csrf
-                            <input type="hidden" name="paymentMethod" value="{{ $payment->method }}">
-                            <button type="submit" class="text-green-600 hover:underline text-xs">Approve</button>
-                          </form>
-                        @endif
-                      </td>
-                    </tr>
-                  @endforeach
-                </tbody>
-              </table>
-            </div>
-            
-            @if($r->payments->where('status', 'pending')->count() > 0)
-              <div class="mt-4 p-3 bg-yellow-50 rounded-lg">
-                <p class="text-sm text-yellow-800">
-                  <strong>{{ $r->payments->where('status', 'pending')->count() }}</strong> 
-                  payment(s) awaiting approval
-                </p>
+      {{-- View Rental Modal --}}
+      <x-modal :name="'view-rental-'.$r->id" :title="'Rental Details - Shop #'.$r->shopNumber">
+        <div class="space-y-4">
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <div class="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span class="font-medium text-gray-700">Shop Number:</span>
+                <div class="text-lg font-bold">{{ $r->shopNumber }}</div>
               </div>
-            @endif
+              <div>
+                <span class="font-medium text-gray-700">Billing Month:</span>
+                <div class="text-lg font-bold">{{ $r->month }}</div>
+              </div>
+              <div>
+                <span class="font-medium text-gray-700">Bill Date:</span>
+                <div>{{ $r->timestamp ? $r->timestamp->format('M j, Y') : '-' }}</div>
+              </div>
+              <div>
+                <span class="font-medium text-gray-700">Status:</span>
+                <div><x-badge :status="$r->status"/></div>
+              </div>
+            </div>
           </div>
-        </x-modal>
-      @endif
+          <div class="bg-green-50 p-4 rounded-lg">
+            <h3 class="font-medium text-gray-700 mb-3">Bill Breakdown</h3>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span>Rental Amount:</span>
+                <span class="font-medium">Rs {{ number_format($r->billAmount, 2) }}</span>
+              </div>
+              <hr class="my-2">
+              <div class="flex justify-between text-lg font-bold">
+                <span>Total Bill Amount:</span>
+                <span class="text-green-600">Rs {{ number_format($r->billAmount, 2) }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="bg-yellow-50 p-4 rounded-lg">
+            <h3 class="font-medium text-gray-700 mb-3">Payment Information</h3>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span>Amount Paid:</span>
+                <span class="font-medium text-green-600">Rs {{ number_format($r->paidAmount, 2) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Remaining Balance:</span>
+                <span class="font-medium text-red-600">Rs {{ number_format($balance, 2) }}</span>
+              </div>
+              @if($r->paymentMethod)
+                <div class="flex justify-between">
+                  <span>Payment Method:</span>
+                  <span class="font-medium uppercase">{{ $r->paymentMethod }}</span>
+                </div>
+              @endif
+            </div>
+          </div>
+          @if($r->recipt)
+            <div class="text-center">
+              <a href="{{ asset('storage/'.$r->recipt) }}" target="_blank"
+                 class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                📄 View Receipt
+              </a>
+            </div>
+          @endif
+        </div>
+      </x-modal>
+
+      {{-- Payment History Modal --}}
+      {{-- Payment history is now only shown in modals, not as a table row. --}}
     @empty
-      <tr><td class="px-3 py-6 text-gray-500 text-center" colspan="9">No data</td></tr>
+  <tr><td class="px-3 py-6 text-gray-500 text-center" colspan="9">No bills found</td></tr>
     @endforelse
   </x-table>
 </div>
