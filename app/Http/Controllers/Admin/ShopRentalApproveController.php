@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ShopRental;
 use App\Services\UnifiedBillingService;
+use App\Services\Payments\UnifiedPaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -12,10 +13,12 @@ use Illuminate\Validation\Rule;
 class ShopRentalApproveController extends Controller
 {
     private UnifiedBillingService $billingService;
+    private UnifiedPaymentService $paymentService;
 
-    public function __construct(UnifiedBillingService $billingService)
+    public function __construct(UnifiedBillingService $billingService, UnifiedPaymentService $paymentService)
     {
         $this->billingService = $billingService;
+        $this->paymentService = $paymentService;
     }
 
     public function approve(Request $request, int $id)
@@ -67,16 +70,16 @@ class ShopRentalApproveController extends Controller
 
                     $row->paymentMethod = $data['paymentMethod'];
 
-                    // ✅ Use the original time customer paid (if any)
-                    $paymentDate = $row->customer_paid_at ?: now();
-
-                    $this->billingService->processShopPayment(
-                        $row,
-                        $newPaymentAmount,
-                        $data['paymentMethod'],
-                        null,
-                        $paymentDate
-                    );
+                    // Use new payment service for admin-initiated payment
+                    $payment = $this->paymentService->make('shop', $row->id, [
+                        'amount' => $newPaymentAmount,
+                        'method' => $data['paymentMethod'],
+                        'receipt' => null, // No receipt for bulk
+                        'isCustomerFlow' => false // Admin payment, auto-approve
+                    ]);
+                    
+                    // Immediately approve the payment
+                    $this->paymentService->approve('shop', $payment->id);
 
                     $processed++;
                 }
@@ -97,6 +100,55 @@ class ShopRentalApproveController extends Controller
             /** @var ShopRental $rental */
             $rental = ShopRental::lockForUpdate()->findOrFail($id);
 
+                        // For cash payments, allow paying all unpaid bills for this shop (across all months)
+            if ($data['paymentMethod'] === 'cash') {
+                // Get all unpaid bills for this shop (all months)
+                $unpaidBills = ShopRental::where('shopNumber', $rental->shopNumber)
+                    ->where('status', '!=', 'Approved')
+                    ->whereRaw('billAmount > paidAmount')
+                    ->orderBy('month', 'asc') // Pay oldest first
+                    ->lockForUpdate()
+                    ->get();
+
+                $totalProcessed = 0;
+                $totalAmountPaid = 0;
+                $paidAmount = array_key_exists('paidAmount', $data) && $data['paidAmount'] !== null 
+                    ? (float)$data['paidAmount'] 
+                    : $unpaidBills->sum(fn($b) => (float)$b->billAmount - (float)$b->paidAmount);
+
+                $remainingCash = $paidAmount;
+
+                foreach ($unpaidBills as $shopBill) {
+                    if ($remainingCash <= 0) break;
+                    
+                    $billBalance = (float)$shopBill->billAmount - (float)$shopBill->paidAmount;
+                    $paymentAmount = min($billBalance, $remainingCash);
+                    
+                    if ($paymentAmount > 0) {
+                        // Use new payment service for admin-initiated payment
+                        $payment = $this->paymentService->make('shop', $shopBill->id, [
+                            'amount' => $paymentAmount,
+                            'method' => $data['paymentMethod'],
+                            'receipt' => null,
+                            'isCustomerFlow' => false // Admin payment, auto-approve
+                        ]);
+                        
+                        // Immediately approve the payment
+                        $this->paymentService->approve('shop', $payment->id);
+                        $totalProcessed++;
+                        $totalAmountPaid += $paymentAmount;
+                        $remainingCash -= $paymentAmount;
+                    }
+                }
+
+                $message = "Successfully processed {$totalProcessed} bills for {$rental->shopNumber} with Rs " . number_format($totalAmountPaid, 2) . " cash payment.";
+                if ($remainingCash > 0) {
+                    $message .= " (Excess: Rs " . number_format($remainingCash, 2) . ")";
+                }
+                
+                return back()->with('success', $message);
+            }
+
             $latestOpen = ShopRental::where('shopNumber', $rental->shopNumber)
                 ->where('status', '!=', 'Approved')
                 ->orderBy('month', 'desc')
@@ -116,15 +168,73 @@ class ShopRentalApproveController extends Controller
             $newPaymentAmount = 0;
 
             if (array_key_exists('paidAmount', $data) && $data['paidAmount'] !== null) {
-                $newPaymentAmount = (float)$data['paidAmount'];
+                // Admin entered a specific amount - this could be either:
+                // 1. Total payment amount (if equals or exceeds billAmount)
+                // 2. Additional payment amount (if less than remaining balance)
+                $adminAmount = (float)$data['paidAmount'];
                 $currentPaid = (float)$rental->paidAmount;
-                $maxNewPayment = max(0, $maxPayable - $currentPaid);
-                $newPaymentAmount = min($newPaymentAmount, $maxNewPayment);
+                $billAmount = (float)$rental->billAmount;
+                $remainingBalance = $billAmount - $currentPaid;
+                
+                // Determine if admin entered total amount or additional amount
+                if ($adminAmount >= $billAmount) {
+                    // Admin entered amount >= bill amount (treat as full payment)
+                    $newPaymentAmount = $remainingBalance;
+                } elseif ($adminAmount > $currentPaid && $adminAmount < $billAmount) {
+                    // Admin entered total target payment amount
+                    $newPaymentAmount = $adminAmount - $currentPaid;
+                } elseif ($adminAmount > 0 && $adminAmount <= $remainingBalance) {
+                    // Admin entered additional payment amount  
+                    $newPaymentAmount = $adminAmount;
+                } elseif (abs($adminAmount - $currentPaid) < 0.01) {
+                    // Admin entered same amount as current - just approve existing payment
+                    $rental->paymentMethod = $data['paymentMethod'];
+                    
+                    // Find latest pending payment for this rental and approve it
+                    $pendingPayment = $this->paymentService->latestPendingPaymentForRental('shop', $rental->id);
+                    if ($pendingPayment) {
+                        $this->paymentService->approve('shop', $pendingPayment->id);
+                    } else {
+                        // Fallback to old approval method if no payment record found
+                        $this->billingService->approveCustomerPayment(
+                            'shop', 
+                            $rental->id, 
+                            $data['paymentMethod'], 
+                            $receiptPath
+                        );
+                    }
+                    return;
+                } else {
+                    abort(422, 'Invalid payment amount. Bill amount: Rs ' . number_format($billAmount, 2) . ', Already paid: Rs ' . number_format($currentPaid, 2) . ', Remaining: Rs ' . number_format($remainingBalance, 2));
+                }
+                
+                // Validate new payment amount
+                if ($newPaymentAmount <= 0) {
+                    abort(422, 'No additional payment needed. Bill already has Rs ' . number_format($currentPaid, 2) . ' paid.');
+                }
+                
+                if (($currentPaid + $newPaymentAmount) > $billAmount) {
+                    abort(422, 'Payment would exceed bill amount. Maximum total payment: Rs ' . number_format($billAmount, 2));
+                }
 
             } elseif ((float)$rental->paidAmount > 0) {
-                $newPaymentAmount = (float)$rental->paidAmount;
-                $rental->paidAmount = 0; // let service allocate cleanly
-                $rental->save();
+                // Bill already has payment amount (from customer payment) - just approve it
+                $rental->paymentMethod = $data['paymentMethod'];
+                
+                // Find latest pending payment for this rental and approve it
+                $pendingPayment = $this->paymentService->latestPendingPaymentForRental('shop', $rental->id);
+                if ($pendingPayment) {
+                    $this->paymentService->approve('shop', $pendingPayment->id);
+                } else {
+                    // Fallback to old approval method if no payment record found
+                    $this->billingService->approveCustomerPayment(
+                        'shop', 
+                        $rental->id, 
+                        $data['paymentMethod'], 
+                        $receiptPath
+                    );
+                }
+                return; // Exit early since approval is complete
 
             } elseif ((float)$rental->paidAmount < (float)$rental->billAmount && $rental->status !== 'PartPayment') {
                 $targetAmount = min((float)$rental->billAmount, $maxPayable);
@@ -137,16 +247,16 @@ class ShopRentalApproveController extends Controller
 
             $rental->paymentMethod = $data['paymentMethod'];
 
-            // ✅ Respect original payment time (so Sep stays Sep, Oct stays Oct)
-            $paymentDate = $rental->customer_paid_at ?: now();
-
-            $this->billingService->processShopPayment(
-                $rental,
-                $newPaymentAmount,
-                $data['paymentMethod'],
-                $receiptPath,
-                $paymentDate
-            );
+            // Use new payment service for admin-initiated payment
+            $payment = $this->paymentService->make('shop', $rental->id, [
+                'amount' => $newPaymentAmount,
+                'method' => $data['paymentMethod'],
+                'receipt' => $receiptPath,
+                'isCustomerFlow' => false // Admin payment, auto-approve
+            ]);
+            
+            // Immediately approve the payment
+            $this->paymentService->approve('shop', $payment->id);
         });
 
         return back()->with('success', 'Rental approved.');

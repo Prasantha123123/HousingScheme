@@ -24,6 +24,12 @@
         .status-inprogress { background-color: #cff4fc; color: #055160; }
         .status-approved { background-color: #d4edda; color: #155724; }
         .status-rejected { background-color: #f8d7da; color: #721c24; }
+        .payment-details { background-color: #f8f9fa; padding: 8px; margin: 5px 0; border-left: 3px solid #007bff; font-size: 10px; }
+        .payment-item { margin: 3px 0; padding: 3px 0; }
+        .payment-type-full { color: #155724; font-weight: bold; }
+        .payment-type-partial { color: #856404; font-weight: bold; }
+        .payment-status-pending { color: #721c24; font-style: italic; }
+        .nested-row { background-color: #f8f9fa; }
         .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #666; border-top: 1px solid #ddd; padding-top: 10px; }
         .no-data { text-align: center; padding: 40px; color: #666; font-style: italic; }
         @page { margin: 15mm; }
@@ -66,7 +72,6 @@
                     <th class="text-right">Bill Amount</th>
                     <th class="text-right">Paid Amount</th>
                     <th class="text-right">Balance</th>
-                    <th class="text-center">Method</th>
                     <th class="text-center">Status</th>
                     <th class="text-center">Date</th>
                 </tr>
@@ -76,6 +81,7 @@
                     @php
                         $balance = max(0, (float)$rental->billAmount - (float)$rental->paidAmount);
                         $statusClass = 'status-' . strtolower($rental->status);
+                        $hasPayments = $rental->payments && $rental->payments->count() > 0;
                     @endphp
                     <tr>
                         <td>{{ $rental->shopNumber }}</td>
@@ -84,12 +90,40 @@
                         <td class="text-right">Rs {{ number_format($rental->billAmount, 2) }}</td>
                         <td class="text-right">Rs {{ number_format($rental->paidAmount, 2) }}</td>
                         <td class="text-right">Rs {{ number_format($balance, 2) }}</td>
-                        <td class="text-center">{{ $rental->paymentMethod ? strtoupper($rental->paymentMethod) : '-' }}</td>
                         <td class="text-center">
                             <span class="status-badge {{ $statusClass }}">{{ $rental->status }}</span>
                         </td>
                         <td class="text-center">{{ $rental->timestamp ? $rental->timestamp->format('M j, Y') : '-' }}</td>
                     </tr>
+                    
+                    @if($hasPayments)
+                    <tr class="nested-row">
+                        <td colspan="8" style="padding: 5px 15px;">
+                            <div style="font-weight: bold; margin-bottom: 5px; font-size: 11px;">Payment History:</div>
+                            @foreach($rental->payments as $payment)
+                                @php
+                                    $paymentTypeClass = $payment->type === 'fullpayment' ? 'payment-type-full' : 'payment-type-partial';
+                                    $paymentStatusClass = $payment->status === 'pending' ? 'payment-status-pending' : '';
+                                @endphp
+                                <div class="payment-item">
+                                    <span class="{{ $paymentTypeClass }}">
+                                        {{ $payment->type === 'fullpayment' ? 'Full Payment' : 'Partial Payment' }}
+                                    </span>
+                                    - Rs {{ number_format($payment->paymentmake, 2) }}
+                                    via <strong>{{ ucfirst($payment->method) }}</strong>
+                                    @if($payment->customerPaidAt)
+                                        on {{ $payment->customerPaidAt->format('M j, Y') }}
+                                    @endif
+                                    @if($payment->status === 'pending')
+                                        <span class="{{ $paymentStatusClass }}"> (Pending Approval)</span>
+                                    @elseif($payment->approvedAt)
+                                        <span style="color: #155724;"> (Approved: {{ $payment->approvedAt->format('M j, Y') }})</span>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </td>
+                    </tr>
+                    @endif
                 @endforeach
             </tbody>
         </table>

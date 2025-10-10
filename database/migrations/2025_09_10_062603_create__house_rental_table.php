@@ -11,19 +11,17 @@ return new class extends Migration {
             $table->string('houseNo');
             $table->unsignedInteger('readingUnit')->default(0);
             $table->string('month', 7); // YYYY-MM
-            $table->unsignedInteger('openingReadingUnit')->default(0);
-
+            $table->unsignedInteger('openingReading')->default(0);
             $table->decimal('billAmount', 12, 2)->default(0);
             $table->decimal('paidAmount', 12, 2)->default(0);
-
+            $table->decimal('monthly_collection_amount', 12, 2)->default(0);
+            $table->string('collection_month', 7)->nullable();
+            $table->decimal('original_payment_amount', 10, 2)->nullable();
             $table->enum('paymentMethod', ['cash','card','online'])->nullable();
             $table->string('recipt')->nullable();
-
-            // 👇 NEW status + timestamps
-            $table->enum('status', ['Pending','InProgress','PartPayment','ExtraPayment','Approved','Rejected'])->default('Pending');
-            $table->timestamp('customer_paid_at')->nullable(); // when customer submits payment (receipt/card)
-            $table->timestamp('approved_at')->nullable();      // when admin approves
-
+            $table->enum('status', ['Pending','InProgress','PartPayment','Approved'])->default('Pending');
+            $table->timestamp('customer_paid_at')->nullable();
+            $table->timestamp('approved_at')->nullable();
             $table->timestamp('timestamp')->useCurrent();
 
             $table->index(['houseNo','month']);

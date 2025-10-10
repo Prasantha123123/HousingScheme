@@ -5,6 +5,7 @@ namespace App\Http\Controllers\House;
 use App\Http\Controllers\Controller;
 use App\Models\HouseRental;
 use App\Services\UnifiedBillingService;
+use App\Services\Payments\UnifiedPaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -18,10 +19,12 @@ use Illuminate\Support\Facades\Log;
 class BillPayController extends Controller
 {
     private UnifiedBillingService $billingService;
+    private UnifiedPaymentService $paymentService;
 
-    public function __construct(UnifiedBillingService $billingService)
+    public function __construct(UnifiedBillingService $billingService, UnifiedPaymentService $paymentService)
     {
         $this->billingService = $billingService;
+        $this->paymentService = $paymentService;
     }
 
     /** Bank transfer (receipt upload) – record payment on latest bill ONLY incl. carry */
@@ -105,15 +108,13 @@ class BillPayController extends Controller
                 return back()->withErrors(['error' => 'Nothing outstanding to pay.']);
             }
 
-            // Use unified billing service to record customer payment
-            $this->billingService->recordCustomerPayment(
-                'house', 
-                $latest->id, 
-                $toApply, 
-                $method, 
-                $receiptPath, 
-                now()
-            );
+            // Use new payment service to record customer payment
+            $payment = $this->paymentService->make('house', $latest->id, [
+                'amount' => $toApply,
+                'method' => $method,
+                'receipt' => $receiptPath,
+                'isCustomerFlow' => true // Customer payment, requires admin approval
+            ]);
 
             return back()->with('success', "Payment of $toApply recorded successfully. Awaiting admin approval.");
         } catch (\Exception $e) {

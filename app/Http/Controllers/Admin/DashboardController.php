@@ -31,6 +31,12 @@ class DashboardController extends Controller
         // Get unified billing metrics
         $metrics = $this->billingService->getDashboardMetrics($month);
         
+        // Get enhanced payment metrics
+        $pendingPayments = $this->billingService->getPendingPaymentsStats($month);
+        $paymentMethods = $this->billingService->getPaymentMethodBreakdown($month);
+        $paymentTypes = $this->billingService->getPaymentTypeBreakdown($month);
+        $recentPayments = $this->billingService->getRecentPayments(10);
+        
         [$y, $m] = explode('-', $month);
         $from = Carbon::create($y, $m, 1)->startOfDay();
         $to   = (clone $from)->endOfMonth();
@@ -145,6 +151,12 @@ class DashboardController extends Controller
             'completedCount' => $metrics['counts']['completed']['house']['count'] + $metrics['counts']['completed']['shop']['count'],
             'pendingTotal' => $metrics['counts']['pending']['house']['outstanding'] + $metrics['counts']['pending']['shop']['outstanding'],
             'completedTotal' => $metrics['counts']['completed']['house']['outstanding'] + $metrics['counts']['completed']['shop']['outstanding'],
+            
+            // Enhanced payment metrics
+            'pendingPayments' => $pendingPayments,
+            'paymentMethods' => $paymentMethods,
+            'paymentTypes' => $paymentTypes,
+            'recentPayments' => $recentPayments,
             
             // Legacy compatibility
             'houseGenerated' => $houseGeneratedCount,

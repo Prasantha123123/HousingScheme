@@ -3,66 +3,71 @@
 namespace App\Http\Controllers\Shop;
 
 use App\Http\Controllers\Controller;
+use App\Models\Shop;
 use App\Models\ShopRental;
 use Illuminate\Http\Request;
 
-/**
- * Shop Rentals Controller for Shop Guard Authentication
- * 
- * Handles rental display and management for shops that authenticate
- * directly via the shop guard (not through user accounts).
- */
 class RentalController extends Controller
 {
-    /**
-     * Display rentals for the authenticated shop.
-     * 
-     * Works with auth('shop') - the authenticated entity is a Shop model.
-     */
-    public function index(Request $request)
+    public function index(Request $r)
     {
-        // Get the authenticated shop from the shop guard
-        $shop = auth('shop')->user();
-        
-        if (!$shop) {
-            abort(401, 'Shop authentication required');
+        // Handle both merchant users and direct shop authentication
+        if (auth('shop')->check()) {
+            // Direct shop authentication
+            $shop = auth('shop')->user();
+            $shopNumbers = [$shop->shopNumber];
+        } elseif (auth()->check() && auth()->user()->role === 'Merchant') {
+            // Merchant user authentication
+            $shopNumbers = Shop::where('MerchantId', auth()->id())->pluck('shopNumber');
+        } else {
+            abort(401, 'Authentication required');
         }
-
-        // Get all rentals for this specific shop
-        $rentals = ShopRental::where('shopNumber', $shop->shopNumber)
+        
+        $rentals = ShopRental::with('payments') // Load payment relationships
+            ->whereIn('shopNumber', $shopNumbers)
             ->orderByDesc('month')
             ->paginate(20);
         
         // Calculate carry forward amounts for each rental (similar to house bills)
         $calc = [];
+        $runningOutstanding = [];
         
-        $shopRentals = ShopRental::where('shopNumber', $shop->shopNumber)
-            ->orderBy('month')
-            ->get();
-        
-        $runningOut = 0;
-        foreach ($shopRentals as $rental) {
-            $current = (float) $rental->billAmount;
-            $carry = $runningOut;
-            $total = $carry + $current;
+        foreach ($shopNumbers as $shopNumber) {
+            $shopRentals = ShopRental::where('shopNumber', $shopNumber)
+                ->orderBy('month')
+                ->get();
             
-            $calc[$rental->id] = [
-                'carry' => $carry,
-                'current' => $current,
-                'total' => $total
-            ];
-            
-            $runningOut = max(0, $total - (float) $rental->paidAmount);
+            $runningOut = 0;
+            foreach ($shopRentals as $rental) {
+                $current = (float) $rental->billAmount;
+                $carry = $runningOut;
+                $total = $carry + $current;
+                
+                $calc[$rental->id] = [
+                    'carry' => $carry,
+                    'current' => $current,
+                    'total' => $total
+                ];
+                
+                $runningOut = max(0, $total - (float) $rental->paidAmount);
+            }
         }
         
-        // Find latest pending bill
-        $latestPending = ShopRental::where('shopNumber', $shop->shopNumber)
-            ->where('status', '!=', 'Approved')
-            ->orderByDesc('month')
-            ->first();
+        // Find latest pending bill for each shop
+        $latestPending = [];
+        foreach ($shopNumbers as $shopNumber) {
+            $latest = ShopRental::where('shopNumber', $shopNumber)
+                ->where('status', '!=', 'Approved')
+                ->orderByDesc('month')
+                ->first();
+            if ($latest) {
+                $latestPending[$shopNumber] = $latest->id;
+            }
+        }
         
-        $latestPendingId = $latestPending ? $latestPending->id : null;
-
-        return view('shop.rentals', compact('rentals', 'shop', 'calc', 'latestPendingId'));
+        // Determine which view to use based on authentication method
+        $viewName = auth('shop')->check() ? 'shop.rentals' : 'shop.rentals.index';
+        
+        return view($viewName, compact('rentals', 'calc', 'latestPending'));
     }
 }

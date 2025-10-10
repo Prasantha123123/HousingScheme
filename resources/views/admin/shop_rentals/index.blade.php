@@ -140,6 +140,13 @@
       </div>
 
       <div class="mt-3 flex items-center justify-end gap-3">
+        {{-- Payment History Button --}}
+        @if($r->payments && $r->payments->count() > 0)
+          <button type="button" class="px-2 py-1 text-purple-600" x-data @click="$dispatch('open-modal','payments-{{ $r->id }}')">
+            Payments ({{ $r->payments->count() }})
+          </button>
+        @endif
+
         @if($r->status === 'Approved')
           <button class="px-2 py-1 text-green-700 opacity-40 cursor-not-allowed" disabled>Approve</button>
         @else
@@ -182,7 +189,7 @@
         $maxPayable = $r->maxPayable ?? 0;
       @endphp
       <x-modal :name="'approve-'.$r->id" :title="'Approve Rental #'.$r->id">
-        <div x-data="{ paidAmount: '', maxAmount: {{ $maxPayable }} }">
+        <div x-data="{ paidAmount: '{{ number_format($maxPayable, 2, '.', '') }}', maxAmount: {{ $maxPayable }} }">
           <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="space-y-3">
             @csrf
             <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod ?: 'cash' }}">
@@ -191,17 +198,17 @@
               @if($r->status === 'PartPayment')
                 <br><span class="text-orange-600">Additional payment for partial rental.</span>
               @endif
-              <br><span class="text-sm text-gray-500">Maximum payable amount: Rs {{ number_format($maxPayable, 2) }}</span>
+              <br><span class="text-sm text-gray-500">Remaining balance to pay: Rs {{ number_format($maxPayable, 2) }}</span>
             </p>
             <label class="block">
               <span class="text-sm">Paid Amount</span>
               <input type="number" name="paidAmount" step="0.01" min="0" max="{{ $maxPayable }}"
                      x-model="paidAmount"
-                     value="{{ old('paidAmount', '') }}"
+                     value="{{ old('paidAmount', number_format($maxPayable, 2, '.', '')) }}"
                      placeholder="Enter amount (max: {{ number_format($maxPayable, 2) }})"
                      class="mt-1 w-full rounded border-gray-300" required>
               <div x-show="parseFloat(paidAmount) > maxAmount" class="text-red-600 text-xs mt-1">
-                Payment amount cannot exceed the maximum payable amount of Rs {{ number_format($maxPayable, 2) }}
+                Payment amount cannot exceed the remaining balance of Rs {{ number_format($maxPayable, 2) }}
               </div>
             </label>
             <div class="text-right">
@@ -262,6 +269,9 @@
           <x-badge :status="$r->status"/>
         </td>
         <td class="px-3 py-2 w-32 text-right whitespace-nowrap">
+          <button type="button" class="text-blue-600 mr-2" x-data @click="$dispatch('open-modal','view-rental-{{ $r->id }}')">
+            View
+          </button>
           @if($r->status === 'Approved')
             <button class="text-green-700 opacity-50 cursor-not-allowed" disabled>Approve</button>
           @else
@@ -305,7 +315,7 @@
           $maxPayable = $r->maxPayable ?? 0;
         @endphp
         <x-modal :name="'approve-'.$r->id" :title="'Approve Rental #'.$r->id">
-          <div x-data="{ paidAmount: '', maxAmount: {{ $maxPayable }} }">
+          <div x-data="{ paidAmount: '{{ number_format($maxPayable, 2, '.', '') }}', maxAmount: {{ $maxPayable }} }">
             <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="space-y-3">
               @csrf
               <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod ?: 'cash' }}">
@@ -314,17 +324,17 @@
                 @if($r->status === 'PartPayment')
                   <br><span class="text-orange-600">Additional payment for partial rental.</span>
                 @endif
-                <br><span class="text-sm text-gray-500">Maximum payable amount: Rs {{ number_format($maxPayable, 2) }}</span>
+                <br><span class="text-sm text-gray-500">Remaining balance to pay: Rs {{ number_format($maxPayable, 2) }}</span>
               </p>
               <label class="block">
                 <span class="text-sm">Paid Amount</span>
                 <input type="number" name="paidAmount" step="0.01" min="0" max="{{ $maxPayable }}"
                        x-model="paidAmount"
-                       value="{{ old('paidAmount', '') }}"
+                       value="{{ old('paidAmount', number_format($maxPayable, 2, '.', '')) }}"
                        placeholder="Enter amount (max: {{ number_format($maxPayable, 2) }})"
                        class="mt-1 w-full rounded border-gray-300" required>
                 <div x-show="parseFloat(paidAmount) > maxAmount" class="text-red-600 text-xs mt-1">
-                  Payment amount cannot exceed the maximum payable amount of Rs {{ number_format($maxPayable, 2) }}
+                  Payment amount cannot exceed the remaining balance of Rs {{ number_format($maxPayable, 2) }}
                 </div>
               </label>
               <div class="text-right">
@@ -339,8 +349,78 @@
           </div>
         </x-modal>
       @endif
+
+      {{-- View Rental Modal --}}
+      <x-modal :name="'view-rental-'.$r->id" :title="'Rental Details - Shop #'.$r->shopNumber">
+        <div class="space-y-4">
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <div class="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span class="font-medium text-gray-700">Shop Number:</span>
+                <div class="text-lg font-bold">{{ $r->shopNumber }}</div>
+              </div>
+              <div>
+                <span class="font-medium text-gray-700">Billing Month:</span>
+                <div class="text-lg font-bold">{{ $r->month }}</div>
+              </div>
+              <div>
+                <span class="font-medium text-gray-700">Bill Date:</span>
+                <div>{{ $r->timestamp ? $r->timestamp->format('M j, Y') : '-' }}</div>
+              </div>
+              <div>
+                <span class="font-medium text-gray-700">Status:</span>
+                <div><x-badge :status="$r->status"/></div>
+              </div>
+            </div>
+          </div>
+          <div class="bg-green-50 p-4 rounded-lg">
+            <h3 class="font-medium text-gray-700 mb-3">Bill Breakdown</h3>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span>Rental Amount:</span>
+                <span class="font-medium">Rs {{ number_format($r->billAmount, 2) }}</span>
+              </div>
+              <hr class="my-2">
+              <div class="flex justify-between text-lg font-bold">
+                <span>Total Bill Amount:</span>
+                <span class="text-green-600">Rs {{ number_format($r->billAmount, 2) }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="bg-yellow-50 p-4 rounded-lg">
+            <h3 class="font-medium text-gray-700 mb-3">Payment Information</h3>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span>Amount Paid:</span>
+                <span class="font-medium text-green-600">Rs {{ number_format($r->paidAmount, 2) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Remaining Balance:</span>
+                <span class="font-medium text-red-600">Rs {{ number_format($balance, 2) }}</span>
+              </div>
+              @if($r->paymentMethod)
+                <div class="flex justify-between">
+                  <span>Payment Method:</span>
+                  <span class="font-medium uppercase">{{ $r->paymentMethod }}</span>
+                </div>
+              @endif
+            </div>
+          </div>
+          @if($r->recipt)
+            <div class="text-center">
+              <a href="{{ asset('storage/'.$r->recipt) }}" target="_blank"
+                 class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                📄 View Receipt
+              </a>
+            </div>
+          @endif
+        </div>
+      </x-modal>
+
+      {{-- Payment History Modal --}}
+      {{-- Payment history is now only shown in modals, not as a table row. --}}
     @empty
-      <tr><td class="px-3 py-6 text-gray-500 text-center" colspan="9">No data</td></tr>
+  <tr><td class="px-3 py-6 text-gray-500 text-center" colspan="9">No bills found</td></tr>
     @endforelse
   </x-table>
 </div>

@@ -11,6 +11,11 @@
       Add House
     </a>
 
+    <a href="{{ route('admin.house-bills.index') }}"
+       class="px-3 py-2 bg-blue-600 text-white rounded-lg w-full sm:w-auto hover:bg-blue-700">
+      View All Bills
+    </a>
+
     <form method="post" action="{{ route('admin.house-bills.generate') }}"
           class="flex flex-wrap items-center gap-2">
       @csrf
@@ -19,7 +24,7 @@
              value="{{ request('month', now()->format('Y-m')) }}"
              class="rounded border-gray-300 w-full sm:w-auto">
       <button class="px-3 py-2 bg-gray-900 text-white rounded-lg w-full sm:w-auto">
-        Generate Current Month Bills
+        Generate Bills & View
       </button>
     </form>
   </div>
