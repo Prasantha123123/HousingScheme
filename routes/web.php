@@ -123,16 +123,16 @@ Route::middleware(['auth'])->group(function () {
 
     // ----- Customer (Houseowner) -----
     Route::middleware('role:Houseowner')->prefix('customer')->as('customer.')->group(function () {
-        Route::get('/bills', [App\Http\Controllers\Customer\BillController::class, 'index'])->name('bills.index');
-        Route::post('/bills/{id}/pay/transfer', [App\Http\Controllers\Customer\BillPayController::class, 'transfer'])->name('bills.pay.transfer');
-        Route::post('/bills/{id}/pay/card', [App\Http\Controllers\Customer\BillPayController::class, 'card'])->name('bills.pay.card');
+        Route::get('/bills', [HouseBillController::class, 'index'])->name('bills.index');
+        Route::post('/bills/{id}/pay/transfer', [HouseBillPayController::class, 'transfer'])->name('bills.pay.transfer');
+        Route::post('/bills/{id}/pay/card', [HouseBillPayController::class, 'card'])->name('bills.pay.card');
     });
 
     // ----- Merchant (Shop Owner) -----
     Route::middleware('role:Merchant')->prefix('merchant')->as('merchant.')->group(function () {
-        Route::get('/rentals', [App\Http\Controllers\Merchant\RentalController::class, 'index'])->name('rentals.index');
-        Route::post('/rentals/{id}/pay/transfer', [App\Http\Controllers\Merchant\RentalPayController::class, 'transfer'])->name('rentals.pay.transfer');
-        Route::post('/rentals/{id}/pay/card', [App\Http\Controllers\Merchant\RentalPayController::class, 'card'])->name('rentals.pay.card');
+        Route::get('/rentals', [ShopRentalController::class, 'index'])->name('rentals.index');
+        Route::post('/rentals/{id}/pay/transfer', [ShopRentalPayController::class, 'transfer'])->name('rentals.pay.transfer');
+        Route::post('/rentals/{id}/pay/card', [ShopRentalPayController::class, 'card'])->name('rentals.pay.card');
     });
 
     // ----- Employee placeholder -----
@@ -161,8 +161,8 @@ Route::middleware(['auth:shop'])->prefix('shop')->as('shop.')->group(function ()
         return view('shop.dashboard', compact('shop'));
     })->name('dashboard');
     
-    // Shop Rentals - using unified Merchant controller
-    Route::get('/rentals', [App\Http\Controllers\Merchant\RentalController::class, 'index'])->name('rentals');
-    Route::post('/rentals/{id}/pay/transfer', [App\Http\Controllers\Merchant\RentalPayController::class, 'transfer'])->name('rentals.pay.transfer');
-    Route::post('/rentals/{id}/pay/card', [App\Http\Controllers\Merchant\RentalPayController::class, 'card'])->name('rentals.pay.card');
+    // Shop Rentals - using dedicated controller
+    Route::get('/rentals', [ShopRentalController::class, 'index'])->name('rentals');
+    Route::post('/rentals/{id}/pay/transfer', [ShopRentalPayController::class, 'transfer'])->name('rentals.pay.transfer');
+    Route::post('/rentals/{id}/pay/card', [ShopRentalPayController::class, 'card'])->name('rentals.pay.card');
 });

@@ -118,6 +118,13 @@
           <a class="text-blue-600 hover:underline text-sm" target="_blank" href="{{ asset('storage/'.$b->recipt) }}">Open</a>
         @endif
 
+        {{-- Payment History Button --}}
+        @if($b->payments && $b->payments->count() > 0)
+          <button type="button" class="text-purple-600 text-sm" x-data @click="$dispatch('open-modal','payments-{{ $b->id }}')">
+            Payments ({{ $b->payments->count() }})
+          </button>
+        @endif
+
         @if($b->status === 'Approved')
           <button class="text-green-700 text-sm opacity-40 cursor-not-allowed" disabled>Approve</button>
         @else
@@ -310,6 +317,81 @@
           </div>
         </form>
       </x-modal>
+
+      {{-- Payment History Modal --}}
+      @if($b->payments && $b->payments->count() > 0)
+        <x-modal :name="'payments-'.$b->id" :title="'Payment History - Bill #'.$b->id">
+          <div class="space-y-3">
+            <div class="text-sm text-gray-600">
+              <strong>House:</strong> {{ $b->houseNo }} | <strong>Month:</strong> {{ $b->month }}
+            </div>
+            
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="px-3 py-2 text-left">Date</th>
+                    <th class="px-3 py-2 text-left">Amount</th>
+                    <th class="px-3 py-2 text-left">Method</th>
+                    <th class="px-3 py-2 text-left">Status</th>
+                    <th class="px-3 py-2 text-left">Type</th>
+                    <th class="px-3 py-2 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @foreach($b->payments->sortByDesc('customerPaidAt') as $payment)
+                    <tr class="border-b">
+                      <td class="px-3 py-2">
+                        {{ $payment->customerPaidAt ? $payment->customerPaidAt->format('M j, Y H:i') : '-' }}
+                      </td>
+                      <td class="px-3 py-2 font-medium">
+                        Rs {{ number_format($payment->paymentmake, 2) }}
+                      </td>
+                      <td class="px-3 py-2">
+                        <span class="px-2 py-1 text-xs rounded bg-gray-100">
+                          {{ ucfirst($payment->method) }}
+                        </span>
+                      </td>
+                      <td class="px-3 py-2">
+                        <span class="px-2 py-1 text-xs rounded {{ $payment->status === 'approval' ? 'bg-green-100 text-green-800' : ($payment->status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800') }}">
+                          {{ ucfirst($payment->status) }}
+                        </span>
+                      </td>
+                      <td class="px-3 py-2">
+                        <span class="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">
+                          {{ ucfirst($payment->paymenttype) }}
+                        </span>
+                      </td>
+                      <td class="px-3 py-2">
+                        @if($payment->recipt)
+                          <a href="{{ asset('storage/' . $payment->recipt) }}" target="_blank" 
+                             class="text-blue-600 hover:underline text-xs">Receipt</a>
+                        @endif
+                        @if($payment->status === 'pending')
+                          <form method="post" action="{{ route('admin.house-bills.approve', $b->id) }}" class="inline ml-2">
+                            @csrf
+                            <input type="hidden" name="paymentMethod" value="{{ $payment->method }}">
+                            <button type="submit" class="text-green-600 hover:underline text-xs">Approve</button>
+                          </form>
+                        @endif
+                      </td>
+                    </tr>
+                  @endforeach
+                </tbody>
+              </table>
+            </div>
+            
+            @if($b->payments->where('status', 'pending')->count() > 0)
+              <div class="mt-4 p-3 bg-yellow-50 rounded-lg">
+                <p class="text-sm text-yellow-800">
+                  <strong>{{ $b->payments->where('status', 'pending')->count() }}</strong> 
+                  payment(s) awaiting approval
+                </p>
+              </div>
+            @endif
+          </div>
+        </x-modal>
+      @endif
     @empty
       <tr><td class="px-3 py-6 text-gray-500" colspan="11">No data</td></tr>
     @endforelse

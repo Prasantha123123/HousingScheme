@@ -29,7 +29,8 @@ class BillController extends Controller
         }
 
         // Get all bills for this specific house
-        $bills = HouseRental::where('houseNo', $house->houseNo)
+        $bills = HouseRental::with('payments') // Load payment relationships
+            ->where('houseNo', $house->houseNo)
             ->orderByDesc('month')
             ->paginate(20);
 

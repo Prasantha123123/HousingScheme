@@ -13,9 +13,14 @@ return new class extends Migration {
             $table->decimal('billAmount', 12, 2)->default(0);
             $table->string('month', 7);
             $table->decimal('paidAmount', 12, 2)->default(0);
+            $table->decimal('monthly_collection_amount', 12, 2)->default(0);
+            $table->string('collection_month', 7)->nullable();
+            $table->decimal('original_payment_amount', 10, 2)->nullable();
             $table->string('paymentMethod')->nullable();
             $table->string('recipt')->nullable();
-            $table->enum('status', ['Pending', 'InProgress', 'Approved', 'PartPayment','ExtraPayment','Rejected'])->default('Pending');
+            $table->enum('status', ['Pending', 'InProgress', 'Approved', 'PartPayment'])->default('Pending');
+            $table->timestamp('customer_paid_at')->nullable();
+            $table->timestamp('approved_at')->nullable();
             $table->timestamp('timestamp')->useCurrent();
             $table->index(['shopNumber', 'month']);
         });

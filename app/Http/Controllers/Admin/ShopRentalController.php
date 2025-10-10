@@ -21,7 +21,7 @@ class ShopRentalController extends Controller
 
     public function index(Request $r)
     {
-        $rows = ShopRental::with(['shop.merchant:id,name'])
+        $rows = ShopRental::with(['shop.merchant:id,name', 'payments']) // Load payment relationships
             ->when($r->filled('month'),      fn ($q) => $q->where('month', $r->string('month')))
             ->when($r->filled('from_date') && $r->filled('to_date'), function($q) use ($r) {
                 $fromDate = $r->date('from_date');
@@ -46,8 +46,10 @@ class ShopRentalController extends Controller
             ->through(function (ShopRental $rental) {
                 // expose merchant name directly to the blade
                 $rental->merchant_name = optional(optional($rental->shop)->merchant)->name;
-                // Calculate maxPayable for each rental
-                $rental->maxPayable = $this->billingService->getMaxPayableAmount('shop', $rental->shopNumber, $rental->month);
+                // Calculate total due amount
+                $totalDue = $this->billingService->getMaxPayableAmount('shop', $rental->shopNumber, $rental->month);
+                // Calculate remaining balance (what can still be paid)
+                $rental->maxPayable = max(0, $totalDue - (float)$rental->paidAmount);
                 return $rental;
             });
 

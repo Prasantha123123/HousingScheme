@@ -140,6 +140,13 @@
       </div>
 
       <div class="mt-3 flex items-center justify-end gap-3">
+        {{-- Payment History Button --}}
+        @if($r->payments && $r->payments->count() > 0)
+          <button type="button" class="px-2 py-1 text-purple-600" x-data @click="$dispatch('open-modal','payments-{{ $r->id }}')">
+            Payments ({{ $r->payments->count() }})
+          </button>
+        @endif
+
         @if($r->status === 'Approved')
           <button class="px-2 py-1 text-green-700 opacity-40 cursor-not-allowed" disabled>Approve</button>
         @else
@@ -182,7 +189,7 @@
         $maxPayable = $r->maxPayable ?? 0;
       @endphp
       <x-modal :name="'approve-'.$r->id" :title="'Approve Rental #'.$r->id">
-        <div x-data="{ paidAmount: '', maxAmount: {{ $maxPayable }} }">
+        <div x-data="{ paidAmount: '{{ number_format($maxPayable, 2, '.', '') }}', maxAmount: {{ $maxPayable }} }">
           <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="space-y-3">
             @csrf
             <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod ?: 'cash' }}">
@@ -191,17 +198,17 @@
               @if($r->status === 'PartPayment')
                 <br><span class="text-orange-600">Additional payment for partial rental.</span>
               @endif
-              <br><span class="text-sm text-gray-500">Maximum payable amount: Rs {{ number_format($maxPayable, 2) }}</span>
+              <br><span class="text-sm text-gray-500">Remaining balance to pay: Rs {{ number_format($maxPayable, 2) }}</span>
             </p>
             <label class="block">
               <span class="text-sm">Paid Amount</span>
               <input type="number" name="paidAmount" step="0.01" min="0" max="{{ $maxPayable }}"
                      x-model="paidAmount"
-                     value="{{ old('paidAmount', '') }}"
+                     value="{{ old('paidAmount', number_format($maxPayable, 2, '.', '')) }}"
                      placeholder="Enter amount (max: {{ number_format($maxPayable, 2) }})"
                      class="mt-1 w-full rounded border-gray-300" required>
               <div x-show="parseFloat(paidAmount) > maxAmount" class="text-red-600 text-xs mt-1">
-                Payment amount cannot exceed the maximum payable amount of Rs {{ number_format($maxPayable, 2) }}
+                Payment amount cannot exceed the remaining balance of Rs {{ number_format($maxPayable, 2) }}
               </div>
             </label>
             <div class="text-right">
@@ -305,7 +312,7 @@
           $maxPayable = $r->maxPayable ?? 0;
         @endphp
         <x-modal :name="'approve-'.$r->id" :title="'Approve Rental #'.$r->id">
-          <div x-data="{ paidAmount: '', maxAmount: {{ $maxPayable }} }">
+          <div x-data="{ paidAmount: '{{ number_format($maxPayable, 2, '.', '') }}', maxAmount: {{ $maxPayable }} }">
             <form method="post" action="{{ route('admin.shop-rentals.approve',$r->id) }}" class="space-y-3">
               @csrf
               <input type="hidden" name="paymentMethod" value="{{ $r->paymentMethod ?: 'cash' }}">
@@ -314,17 +321,17 @@
                 @if($r->status === 'PartPayment')
                   <br><span class="text-orange-600">Additional payment for partial rental.</span>
                 @endif
-                <br><span class="text-sm text-gray-500">Maximum payable amount: Rs {{ number_format($maxPayable, 2) }}</span>
+                <br><span class="text-sm text-gray-500">Remaining balance to pay: Rs {{ number_format($maxPayable, 2) }}</span>
               </p>
               <label class="block">
                 <span class="text-sm">Paid Amount</span>
                 <input type="number" name="paidAmount" step="0.01" min="0" max="{{ $maxPayable }}"
                        x-model="paidAmount"
-                       value="{{ old('paidAmount', '') }}"
+                       value="{{ old('paidAmount', number_format($maxPayable, 2, '.', '')) }}"
                        placeholder="Enter amount (max: {{ number_format($maxPayable, 2) }})"
                        class="mt-1 w-full rounded border-gray-300" required>
                 <div x-show="parseFloat(paidAmount) > maxAmount" class="text-red-600 text-xs mt-1">
-                  Payment amount cannot exceed the maximum payable amount of Rs {{ number_format($maxPayable, 2) }}
+                  Payment amount cannot exceed the remaining balance of Rs {{ number_format($maxPayable, 2) }}
                 </div>
               </label>
               <div class="text-right">
@@ -336,6 +343,81 @@
                 </button>
               </div>
             </form>
+          </div>
+        </x-modal>
+      @endif
+
+      {{-- Payment History Modal --}}
+      @if($r->payments && $r->payments->count() > 0)
+        <x-modal :name="'payments-'.$r->id" :title="'Payment History - Rental #'.$r->id">
+          <div class="space-y-3">
+            <div class="text-sm text-gray-600">
+              <strong>Shop:</strong> {{ $r->shopNumber }} | <strong>Month:</strong> {{ $r->month }}
+            </div>
+            
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                  <tr>
+                    <th class="px-3 py-2 text-left">Date</th>
+                    <th class="px-3 py-2 text-left">Amount</th>
+                    <th class="px-3 py-2 text-left">Method</th>
+                    <th class="px-3 py-2 text-left">Status</th>
+                    <th class="px-3 py-2 text-left">Type</th>
+                    <th class="px-3 py-2 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @foreach($r->payments->sortByDesc('customerPaidAt') as $payment)
+                    <tr class="border-b">
+                      <td class="px-3 py-2">
+                        {{ $payment->customerPaidAt ? $payment->customerPaidAt->format('M j, Y H:i') : '-' }}
+                      </td>
+                      <td class="px-3 py-2 font-medium">
+                        Rs {{ number_format($payment->paymentmake, 2) }}
+                      </td>
+                      <td class="px-3 py-2">
+                        <span class="px-2 py-1 text-xs rounded bg-gray-100">
+                          {{ ucfirst($payment->method) }}
+                        </span>
+                      </td>
+                      <td class="px-3 py-2">
+                        <span class="px-2 py-1 text-xs rounded {{ $payment->status === 'approval' ? 'bg-green-100 text-green-800' : ($payment->status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800') }}">
+                          {{ ucfirst($payment->status) }}
+                        </span>
+                      </td>
+                      <td class="px-3 py-2">
+                        <span class="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">
+                          {{ ucfirst($payment->paymenttype) }}
+                        </span>
+                      </td>
+                      <td class="px-3 py-2">
+                        @if($payment->recipt)
+                          <a href="{{ asset('storage/' . $payment->recipt) }}" target="_blank" 
+                             class="text-blue-600 hover:underline text-xs">Receipt</a>
+                        @endif
+                        @if($payment->status === 'pending')
+                          <form method="post" action="{{ route('admin.shop-rentals.approve', $r->id) }}" class="inline ml-2">
+                            @csrf
+                            <input type="hidden" name="paymentMethod" value="{{ $payment->method }}">
+                            <button type="submit" class="text-green-600 hover:underline text-xs">Approve</button>
+                          </form>
+                        @endif
+                      </td>
+                    </tr>
+                  @endforeach
+                </tbody>
+              </table>
+            </div>
+            
+            @if($r->payments->where('status', 'pending')->count() > 0)
+              <div class="mt-4 p-3 bg-yellow-50 rounded-lg">
+                <p class="text-sm text-yellow-800">
+                  <strong>{{ $r->payments->where('status', 'pending')->count() }}</strong> 
+                  payment(s) awaiting approval
+                </p>
+              </div>
+            @endif
           </div>
         </x-modal>
       @endif

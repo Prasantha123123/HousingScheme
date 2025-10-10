@@ -97,6 +97,29 @@
         <span class="font-semibold">Rs {{ number_format($total,2) }}</span>
       </div>
 
+      {{-- Payment History Section --}}
+      @if($b->payments && $b->payments->count() > 0)
+        <div class="mt-3 p-3 bg-gray-50 rounded-lg">
+          <div class="text-sm font-medium text-gray-700 mb-2">Payment History ({{ $b->payments->count() }})</div>
+          <div class="space-y-2">
+            @foreach($b->payments->sortByDesc('customerPaidAt')->take(3) as $payment)
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center space-x-2">
+                  <span class="px-2 py-1 rounded {{ $payment->status === 'approval' ? 'bg-green-100 text-green-800' : ($payment->status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800') }}">
+                    {{ ucfirst($payment->status) }}
+                  </span>
+                  <span class="text-gray-600">{{ $payment->customerPaidAt ? $payment->customerPaidAt->format('M j') : '-' }}</span>
+                </div>
+                <div class="font-medium">Rs {{ number_format($payment->paymentmake, 2) }}</div>
+              </div>
+            @endforeach
+            @if($b->payments->count() > 3)
+              <div class="text-xs text-gray-500">+ {{ $b->payments->count() - 3 }} more payments</div>
+            @endif
+          </div>
+        </div>
+      @endif
+
       @if($b->status !== 'Approved')
         <div class="mt-3" x-data="{ 
           method: '{{ $b->paymentMethod === 'card' ? 'card' : 'online' }}',

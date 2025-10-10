@@ -48,89 +48,14 @@ class UnifiedBillingService
                 ->lockForUpdate()
                 ->get();
 
-            // Calculate total amount due up to current month
+            $this->allocatePaymentToBills($unpaidBills, $paymentAmount, $paymentMethod, $receiptPath, $paymentDate, $collectionMonth, 'Approved');
+
+            // Store any overpayment as credit (if needed in future)
             $totalDue = $unpaidBills->sum(function ($bill) {
                 return max(0, (float)$bill->billAmount - (float)$bill->paidAmount);
             });
-
-            // Cap payment to total due (prevent overpayment)
             $effectivePayment = min($paymentAmount, $totalDue);
-
-            if ($effectivePayment <= 0) {
-                throw new \Exception('No outstanding amount to pay.');
-            }
-
-            // Allocate payment oldest-first
-            $remainingPayment = $effectivePayment;
-            $paymentDistribution = []; // Track where customer payments actually go for display
-
-            foreach ($unpaidBills as $bill) {
-                if ($remainingPayment <= 0) break;
-
-                $billOutstanding = max(0, (float)$bill->billAmount - (float)$bill->paidAmount);
-                if ($billOutstanding <= 0) continue;
-
-                $allocation = min($remainingPayment, $billOutstanding);
-
-                // Track payment distribution for display purposes
-                $paymentDistribution[$bill->month] = ($paymentDistribution[$bill->month] ?? 0) + $allocation;
-
-                // Update bill with allocated amount
-                $bill->paidAmount = round((float)$bill->paidAmount + $allocation, 2);
-
-                // Update status based on bill completion
-                if ($bill->paidAmount >= (float)$bill->billAmount - 0.01) {
-                    $bill->paidAmount = (float)$bill->billAmount; // Exact amount
-                    $bill->status = 'Approved';
-                    $bill->approved_at = $bill->approved_at ?? $paymentDate;
-                } else {
-                    $bill->status = 'PartPayment';
-                }
-
-                // Set payment method if not already set
-                if (!$bill->paymentMethod) {
-                    $bill->paymentMethod = $paymentMethod;
-                }
-
-                $bill->save();
-                $remainingPayment -= $allocation;
-            }
-
-            // Update original_payment_amount to show customer payment amounts per bill
-            // This is for display purposes - showing what customer paid for each month
-            if (isset($paymentDistribution[$collectionMonth])) {
-                // Payment was made in a month that has a bill
-                $targetBill = $unpaidBills->where('month', $collectionMonth)->first();
-                if ($targetBill) {
-                    $targetBill->original_payment_amount = ($targetBill->original_payment_amount ?? 0) + $paymentAmount;
-                    $targetBill->save();
-                }
-            } else {
-                // Distribute the payment amount proportionally for display
-                $totalAllocated = array_sum($paymentDistribution);
-                if ($totalAllocated > 0) {
-                    foreach ($paymentDistribution as $month => $allocation) {
-                        $billToUpdate = $unpaidBills->where('month', $month)->first();
-                        if ($billToUpdate) {
-                            // Show proportional amount of customer payment for this bill
-                            $proportionalPayment = ($allocation / $totalAllocated) * $paymentAmount;
-                            $billToUpdate->original_payment_amount = ($billToUpdate->original_payment_amount ?? 0) + $proportionalPayment;
-                            $billToUpdate->save();
-                        }
-                    }
-                }
-            }
-
-            // Update the current bill with collection tracking
-            $currentBill->customer_paid_at = $paymentDate;
-
-            if ($receiptPath) {
-                $currentBill->recipt = $receiptPath;
-            }
-
-            $currentBill->save();
-
-            // Store any overpayment as credit (if needed in future)
+            
             if ($paymentAmount > $effectivePayment) {
                 $credit = $paymentAmount - $effectivePayment;
                 // TODO: Store in customer credits table for future use
@@ -155,85 +80,14 @@ class UnifiedBillingService
                 ->lockForUpdate()
                 ->get();
 
-            // Calculate total amount due up to current month
+            $this->allocatePaymentToBills($unpaidBills, $paymentAmount, $paymentMethod, $receiptPath, $paymentDate, $collectionMonth, 'Approved');
+
+            // Store any overpayment as credit (if needed in future)
             $totalDue = $unpaidBills->sum(function ($bill) {
                 return max(0, (float)$bill->billAmount - (float)$bill->paidAmount);
             });
-
-            // Cap payment to total due (prevent overpayment)
             $effectivePayment = min($paymentAmount, $totalDue);
-
-            if ($effectivePayment <= 0) {
-                throw new \Exception('No outstanding amount to pay.');
-            }
-
-            // Allocate payment oldest-first
-            $remainingPayment = $effectivePayment;
-            $paymentDistribution = []; // Track where customer payments actually go for display
-
-            foreach ($unpaidBills as $bill) {
-                if ($remainingPayment <= 0) break;
-
-                $billOutstanding = max(0, (float)$bill->billAmount - (float)$bill->paidAmount);
-                if ($billOutstanding <= 0) continue;
-
-                $allocation = min($remainingPayment, $billOutstanding);
-
-                // Track payment distribution for display purposes
-                $paymentDistribution[$bill->month] = ($paymentDistribution[$bill->month] ?? 0) + $allocation;
-
-                // Update bill with allocated amount
-                $bill->paidAmount = round((float)$bill->paidAmount + $allocation, 2);
-
-                // Update status based on bill completion
-                if ($bill->paidAmount >= (float)$bill->billAmount - 0.01) {
-                    $bill->paidAmount = (float)$bill->billAmount; // Exact amount
-                    $bill->status = 'Approved';
-                    $bill->approved_at = $bill->approved_at ?? $paymentDate;
-                } else {
-                    $bill->status = 'PartPayment';
-                }
-
-                // Set payment method if not already set
-                if (!$bill->paymentMethod) {
-                    $bill->paymentMethod = $paymentMethod;
-                }
-
-                $bill->save();
-                $remainingPayment -= $allocation;
-            }
-
-            // Update original_payment_amount to show customer payment amounts per bill
-            if (isset($paymentDistribution[$collectionMonth])) {
-                $targetBill = $unpaidBills->where('month', $collectionMonth)->first();
-                if ($targetBill) {
-                    $targetBill->original_payment_amount = ($targetBill->original_payment_amount ?? 0) + $paymentAmount;
-                    $targetBill->save();
-                }
-            } else {
-                $totalAllocated = array_sum($paymentDistribution);
-                if ($totalAllocated > 0) {
-                    foreach ($paymentDistribution as $month => $allocation) {
-                        $billToUpdate = $unpaidBills->where('month', $month)->first();
-                        if ($billToUpdate) {
-                            $proportionalPayment = ($allocation / $totalAllocated) * $paymentAmount;
-                            $billToUpdate->original_payment_amount = ($billToUpdate->original_payment_amount ?? 0) + $proportionalPayment;
-                            $billToUpdate->save();
-                        }
-                    }
-                }
-            }
-
-            // Update the current bill with collection tracking
-            $currentBill->customer_paid_at = $paymentDate;
-
-            if ($receiptPath) {
-                $currentBill->recipt = $receiptPath;
-            }
-
-            $currentBill->save();
-
-            // Store any overpayment as credit (if needed in future)
+            
             if ($paymentAmount > $effectivePayment) {
                 $credit = $paymentAmount - $effectivePayment;
                 // TODO: Store in customer credits table for future use
@@ -534,48 +388,201 @@ class UnifiedBillingService
     }
 
     /**
-     * Record customer payment without allocation (for InProgress status)
+     * Record customer payment with proper allocation (for InProgress status)
      */
     public function recordCustomerPayment(string $type, int $id, float $paymentAmount, string $paymentMethod, ?string $receiptPath = null, ?Carbon $paymentDate = null): void
     {
         $paymentDate = $paymentDate ?? now();
+        $collectionMonth = $paymentDate->format('Y-m');
 
-        DB::transaction(function () use ($type, $id, $paymentAmount, $paymentMethod, $receiptPath, $paymentDate) {
+        DB::transaction(function () use ($type, $id, $paymentAmount, $paymentMethod, $receiptPath, $paymentDate, $collectionMonth) {
             if ($type === 'house') {
-                $bill = HouseRental::lockForUpdate()->findOrFail($id);
+                $currentBill = HouseRental::lockForUpdate()->findOrFail($id);
+                
+                // Get all unpaid bills up to and including current month for this house
+                $unpaidBills = HouseRental::where('houseNo', $currentBill->houseNo)
+                    ->where('month', '<=', $currentBill->month)
+                    ->orderBy('month') // oldest first
+                    ->lockForUpdate()
+                    ->get();
 
-                // Add to existing payment amount
-                $bill->paidAmount = (float)$bill->paidAmount + $paymentAmount;
-                $bill->paymentMethod = $paymentMethod;
-                $bill->status = 'InProgress';
-                $bill->customer_paid_at = $paymentDate;
-
-                if ($receiptPath) {
-                    $bill->recipt = $receiptPath;
-                }
-
-                $bill->save();
+                $this->allocatePaymentToBills($unpaidBills, $paymentAmount, $paymentMethod, $receiptPath, $paymentDate, $collectionMonth, 'InProgress');
 
             } elseif ($type === 'shop') {
-                $bill = ShopRental::lockForUpdate()->findOrFail($id);
+                $currentBill = ShopRental::lockForUpdate()->findOrFail($id);
+                
+                // Get all unpaid bills up to and including current month for this shop
+                $unpaidBills = ShopRental::where('shopNumber', $currentBill->shopNumber)
+                    ->where('month', '<=', $currentBill->month)
+                    ->orderBy('month') // oldest first
+                    ->lockForUpdate()
+                    ->get();
 
-                // Add to existing payment amount
-                $bill->paidAmount = (float)$bill->paidAmount + $paymentAmount;
-                $bill->paymentMethod = $paymentMethod;
-                $bill->status = 'InProgress';
-                $bill->customer_paid_at = $paymentDate;
-
-                if ($receiptPath) {
-                    $bill->recipt = $receiptPath;
-                }
-
-                $bill->save();
+                $this->allocatePaymentToBills($unpaidBills, $paymentAmount, $paymentMethod, $receiptPath, $paymentDate, $collectionMonth, 'InProgress');
             }
         });
     }
 
     /**
-     * Get maximum payable amount for a bill (prevents overpayment)
+     * Allocate payment across bills with proper tracking
+     */
+    private function allocatePaymentToBills($unpaidBills, float $paymentAmount, string $paymentMethod, ?string $receiptPath, Carbon $paymentDate, string $collectionMonth, string $statusForPartialPayment = 'PartPayment'): void
+    {
+        // Calculate total amount due up to current month
+        $totalDue = $unpaidBills->sum(function ($bill) {
+            return max(0, (float)$bill->billAmount - (float)$bill->paidAmount);
+        });
+
+        // Cap payment to total due (prevent overpayment)
+        $effectivePayment = min($paymentAmount, $totalDue);
+
+        if ($effectivePayment <= 0) {
+            throw new \Exception('No outstanding amount to pay.');
+        }
+
+        // Allocate payment oldest-first
+        $remainingPayment = $effectivePayment;
+        $paymentDistribution = []; // Track where customer payments actually go for display
+
+        foreach ($unpaidBills as $bill) {
+            if ($remainingPayment <= 0) break;
+
+            $billOutstanding = max(0, (float)$bill->billAmount - (float)$bill->paidAmount);
+            if ($billOutstanding <= 0) continue;
+
+            $allocation = min($remainingPayment, $billOutstanding);
+
+            // Track payment distribution for display purposes
+            $paymentDistribution[$bill->month] = ($paymentDistribution[$bill->month] ?? 0) + $allocation;
+
+            // Update bill with allocated amount
+            $bill->paidAmount = round((float)$bill->paidAmount + $allocation, 2);
+
+            // Update status based on bill completion and requested status
+            if ($bill->paidAmount >= (float)$bill->billAmount - 0.01) {
+                $bill->paidAmount = (float)$bill->billAmount; // Exact amount
+                $bill->status = $statusForPartialPayment === 'InProgress' ? 'InProgress' : 'Approved';
+                if ($statusForPartialPayment !== 'InProgress') {
+                    $bill->approved_at = $bill->approved_at ?? $paymentDate;
+                }
+            } else {
+                // For partial payments, always use PartPayment status regardless of the requested status
+                $bill->status = $statusForPartialPayment === 'InProgress' ? 'InProgress' : 'PartPayment';
+            }
+
+            // Set payment method and payment date
+            $bill->paymentMethod = $paymentMethod;
+            $bill->customer_paid_at = $paymentDate;
+            
+            if ($receiptPath) {
+                $bill->recipt = $receiptPath;
+            }
+
+            $bill->save();
+            $remainingPayment -= $allocation;
+        }
+
+        // Update original_payment_amount to show customer payment amounts per bill
+        // This tracks what the customer actually paid for each month
+        $currentBill = $unpaidBills->where('month', $collectionMonth)->first();
+        if ($currentBill) {
+            // Payment made for current month bill - add full amount to current month
+            $currentBill->original_payment_amount = ($currentBill->original_payment_amount ?? 0) + $paymentAmount;
+            $currentBill->save();
+        } else {
+            // Payment made for future month or no bill exists for payment month
+            // Distribute the payment amount proportionally based on allocation
+            $totalAllocated = array_sum($paymentDistribution);
+            if ($totalAllocated > 0) {
+                foreach ($paymentDistribution as $month => $allocation) {
+                    $billToUpdate = $unpaidBills->where('month', $month)->first();
+                    if ($billToUpdate) {
+                        $proportionalPayment = ($allocation / $totalAllocated) * $paymentAmount;
+                        $billToUpdate->original_payment_amount = ($billToUpdate->original_payment_amount ?? 0) + $proportionalPayment;
+                        $billToUpdate->save();
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Approve customer payment - changes status without re-allocating funds
+     */
+    public function approveCustomerPayment(string $type, int $id, string $paymentMethod, ?string $receiptPath = null): void
+    {
+        DB::transaction(function () use ($type, $id, $paymentMethod, $receiptPath) {
+            if ($type === 'house') {
+                $currentBill = HouseRental::lockForUpdate()->findOrFail($id);
+                
+                // Get all bills for this house up to current month to check for proper allocation
+                $allBills = HouseRental::where('houseNo', $currentBill->houseNo)
+                    ->where('month', '<=', $currentBill->month)
+                    ->orderBy('month')
+                    ->lockForUpdate()
+                    ->get();
+
+                $this->updateStatusToApproved($allBills, $paymentMethod, $receiptPath);
+
+            } elseif ($type === 'shop') {
+                $currentBill = ShopRental::lockForUpdate()->findOrFail($id);
+                
+                // Get all bills for this shop up to current month to check for proper allocation
+                $allBills = ShopRental::where('shopNumber', $currentBill->shopNumber)
+                    ->where('month', '<=', $currentBill->month)
+                    ->orderBy('month')
+                    ->lockForUpdate()
+                    ->get();
+
+                $this->updateStatusToApproved($allBills, $paymentMethod, $receiptPath);
+            }
+        });
+    }
+
+    /**
+     * Update bill statuses to approved based on payment amounts
+     */
+    private function updateStatusToApproved($bills, string $paymentMethod, ?string $receiptPath): void
+    {
+        foreach ($bills as $bill) {
+            // Only update bills that are in InProgress status (customer payment pending approval)
+            if ($bill->status !== 'InProgress') {
+                continue;
+            }
+
+            // Update payment method and receipt if provided
+            if (!$bill->paymentMethod) {
+                $bill->paymentMethod = $paymentMethod;
+            }
+            
+            if ($receiptPath && !$bill->recipt) {
+                $bill->recipt = $receiptPath;
+            }
+
+            // Check if bill is fully paid - use proper comparison
+            $paidAmount = (float)$bill->paidAmount;
+            $billAmount = (float)$bill->billAmount;
+            
+            if ($paidAmount >= $billAmount - 0.01) {
+                // Bill is fully paid
+                $bill->paidAmount = $billAmount; // Exact amount
+                $bill->status = 'Approved';
+                $bill->approved_at = $bill->approved_at ?? now();
+            } else if ($paidAmount > 0) {
+                // Bill is partially paid
+                $bill->status = 'PartPayment';
+                // Don't set approved_at for partial payments
+            } else {
+                // No payment recorded - this shouldn't happen in InProgress status
+                $bill->status = 'Pending';
+            }
+
+            $bill->save();
+        }
+    }
+
+    /**
+     * Get maximum payable amount for a bill (total due amount, not outstanding)
      */
     public function getMaxPayableAmount(string $entityType, string $entityId, string $month): float
     {
@@ -584,13 +591,55 @@ class UnifiedBillingService
                 ->where('month', '<=', $month)
                 ->orderBy('month')
                 ->get();
+                
+            // Calculate total due amount using same logic as frontend
+            $unitPrice = (float) \App\Models\Setting::get('water_unit_price', 0);
+            $sewerage  = (float) \App\Models\Setting::get('sewerage_charge', 0);
+            $service   = (float) \App\Models\Setting::get('service_charge', 0);
+            
+            $runningCarry = 0;
+            $totalDue = 0;
+            
+            foreach ($bills as $bill) {
+                $usage = max(0, $bill->readingUnit - $bill->openingReading);
+                $current = $sewerage + $service + ($usage * $unitPrice);
+                $total = $runningCarry + $current;
+                $paid = (float) $bill->paidAmount;
+                
+                // For the specific month requested, return the total due
+                if ($bill->month === $month) {
+                    return $total;
+                }
+                
+                // Update carry forward for next iteration
+                $runningCarry = max(0, $total - $paid);
+            }
+            
+            return $totalDue;
         } else {
+            // Shop rental calculation - return total due amount
             $bills = ShopRental::where('shopNumber', $entityId)
                 ->where('month', '<=', $month)
                 ->orderBy('month')
                 ->get();
+                
+            $runningCarry = 0;
+            
+            foreach ($bills as $bill) {
+                $current = (float) $bill->billAmount;
+                $total = $runningCarry + $current;
+                $paid = (float) $bill->paidAmount;
+                
+                // For the specific month requested, return the total due
+                if ($bill->month === $month) {
+                    return $total;
+                }
+                
+                // Update carry forward for next iteration
+                $runningCarry = max(0, $total - $paid);
+            }
+            
+            return 0;
         }
-
-        return $bills->sum(fn($bill) => max(0, (float)$bill->billAmount - (float)$bill->paidAmount));
     }
 }

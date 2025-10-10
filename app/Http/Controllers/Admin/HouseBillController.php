@@ -22,7 +22,7 @@ class HouseBillController extends Controller
 
     public function index(Request $request)
     {
-        $bills = HouseRental::query()
+        $bills = HouseRental::with('payments') // Load payment relationships
             ->when($request->filled('month'), fn($q) => $q->where('month', $request->string('month')))
             ->when($request->filled('from_date') && $request->filled('to_date'), function($q) use ($request) {
                 $fromDate = $request->date('from_date');
@@ -44,9 +44,12 @@ class HouseBillController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        // Calculate maxPayable for each bill
+        // Calculate remaining balance for each bill
         $bills->getCollection()->transform(function ($bill) {
-            $bill->maxPayable = $this->billingService->getMaxPayableAmount('house', $bill->houseNo, $bill->month);
+            // Calculate total due amount
+            $totalDue = $this->billingService->getMaxPayableAmount('house', $bill->houseNo, $bill->month);
+            // Calculate remaining balance (what can still be paid)
+            $bill->maxPayable = max(0, $totalDue - (float)$bill->paidAmount);
             return $bill;
         });
 
