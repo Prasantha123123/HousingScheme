@@ -134,6 +134,7 @@
 @endif
 
 @php
+  use App\Models\WaterReading;
   $unitPrice = (float)\App\Models\Setting::get('water_unit_price', 0);
   $sewerage  = (float)\App\Models\Setting::get('sewerage_charge', 0);
   $service   = (float)\App\Models\Setting::get('service_charge', 0);
@@ -143,7 +144,13 @@
 <div class="sm:hidden space-y-3">
   @forelse($bills ?? [] as $b)
     @php
-      $usage   = max(0, ($b->readingUnit - $b->openingReadingUnit));
+      // Prefer WaterReadings table values for this house+month; fallback to fields on HouseRental
+      $wr = WaterReading::where('houseNo', $b->houseNo)
+              ->where('month', $b->month)
+              ->first();
+      $opening = (int)($wr->openingReadingUnit ?? $b->openingReading ?? $b->openingReadingUnit ?? 0);
+      $current = (int)($wr->readingUnit        ?? $b->readingUnit        ?? 0);
+      $usage   = max(0, $current - $opening);
       $balance = max(0, (float)$b->billAmount - (float)$b->paidAmount);
     @endphp
     <div class="rounded-lg border bg-white p-3 shadow-sm">
@@ -161,7 +168,7 @@
       <div class="mt-2 grid grid-cols-2 gap-2 text-sm">
         <div>
           <div class="text-gray-500">Reading</div>
-          <div>{{ $b->openingReadingUnit }} → {{ $b->readingUnit }}</div>
+          <div>{{ $opening }} → {{ $current }}</div>
         </div>
         <div class="text-right">
           <div class="text-gray-500">Usage</div>
@@ -316,13 +323,19 @@
 
     @forelse($bills ?? [] as $b)
       @php
-        $usage   = max(0, ($b->readingUnit - $b->openingReadingUnit));
+        // Prefer WaterReadings for this house+month
+        $wr = WaterReading::where('houseNo', $b->houseNo)
+                ->where('month', $b->month)
+                ->first();
+        $opening = (int)($wr->openingReadingUnit ?? $b->openingReading ?? $b->openingReadingUnit ?? 0);
+        $current = (int)($wr->readingUnit        ?? $b->readingUnit        ?? 0);
+        $usage   = max(0, $current - $opening);
         $balance = max(0, (float)$b->billAmount - (float)$b->paidAmount);
       @endphp
       <tr class="hover:bg-gray-50">
         <td class="px-3 py-2">{{ $b->houseNo }}</td>
         <td class="px-3 py-2">{{ $b->month }}</td>
-        <td class="px-3 py-2 hidden md:table-cell">{{ $b->openingReadingUnit }} → {{ $b->readingUnit }}</td>
+        <td class="px-3 py-2 hidden md:table-cell">{{ $opening }} → {{ $current }}</td>
         <td class="px-3 py-2 text-right hidden md:table-cell">{{ $usage }}</td>
         <td class="px-3 py-2 text-right">Rs {{ number_format($b->billAmount,2) }}</td>
         <td class="px-3 py-2 text-right">Rs {{ number_format($b->original_payment_amount ?: $b->paidAmount, 2) }}</td>
@@ -434,117 +447,6 @@
         </form>
       </x-modal>
 
-      {{-- View Bill Modal --}}
-      <x-modal :name="'view-bill-'.$b->id" :title="'Bill Details - House #'.$b->houseNo">
-        <div class="space-y-4">
-          {{-- Basic Information --}}
-          <div class="bg-gray-50 p-4 rounded-lg">
-            <div class="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span class="font-medium text-gray-700">House Number:</span>
-                <div class="text-lg font-bold">{{ $b->houseNo }}</div>
-              </div>
-              <div>
-                <span class="font-medium text-gray-700">Billing Month:</span>
-                <div class="text-lg font-bold">{{ $b->month }}</div>
-              </div>
-              <div>
-                <span class="font-medium text-gray-700">Bill Date:</span>
-                <div>{{ $b->timestamp ? $b->timestamp->format('M j, Y') : '-' }}</div>
-              </div>
-              <div>
-                <span class="font-medium text-gray-700">Status:</span>
-                <div><x-badge :status="$b->status"/></div>
-              </div>
-            </div>
-          </div>
-
-          {{-- Water Usage --}}
-          <div class="bg-blue-50 p-4 rounded-lg">
-            <h3 class="font-medium text-gray-700 mb-3">Water Usage Details</h3>
-            <div class="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span class="text-gray-600">Opening Reading:</span>
-                <div class="font-medium">{{ number_format($b->openingReadingUnit) }} units</div>
-              </div>
-              <div>
-                <span class="text-gray-600">Current Reading:</span>
-                <div class="font-medium">{{ number_format($b->readingUnit) }} units</div>
-              </div>
-              <div>
-                <span class="text-gray-600">Usage:</span>
-                <div class="font-bold text-blue-600">{{ number_format($usage) }} units</div>
-              </div>
-              <div>
-                <span class="text-gray-600">Unit Price:</span>
-                <div class="font-medium">Rs {{ number_format($unitPrice, 2) }}</div>
-              </div>
-            </div>
-          </div>
-
-          {{-- Bill Breakdown --}}
-          <div class="bg-green-50 p-4 rounded-lg">
-            <h3 class="font-medium text-gray-700 mb-3">Bill Breakdown</h3>
-            <div class="space-y-2 text-sm">
-              <div class="flex justify-between">
-                <span>Sewerage Charge:</span>
-                <span class="font-medium">Rs {{ number_format($sewerage, 2) }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span>Service Charge:</span>
-                <span class="font-medium">Rs {{ number_format($service, 2) }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span>Water Usage ({{ $usage }} × Rs {{ number_format($unitPrice, 2) }}):</span>
-                <span class="font-medium">Rs {{ number_format($usage * $unitPrice, 2) }}</span>
-              </div>
-              <hr class="my-2">
-              <div class="flex justify-between text-lg font-bold">
-                <span>Total Bill Amount:</span>
-                <span class="text-green-600">Rs {{ number_format($b->billAmount, 2) }}</span>
-              </div>
-            </div>
-          </div>
-
-          {{-- Payment Status --}}
-          <div class="bg-yellow-50 p-4 rounded-lg">
-            <h3 class="font-medium text-gray-700 mb-3">Payment Information</h3>
-            <div class="space-y-2 text-sm">
-              <div class="flex justify-between">
-                <span>Amount Paid:</span>
-                <span class="font-medium text-green-600">Rs {{ number_format($b->paidAmount, 2) }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span>Remaining Balance:</span>
-                <span class="font-medium text-red-600">Rs {{ number_format($balance, 2) }}</span>
-              </div>
-              @if($b->paymentMethod)
-                <div class="flex justify-between">
-                  <span>Payment Method:</span>
-                  <span class="font-medium uppercase">{{ $b->paymentMethod }}</span>
-                </div>
-              @endif
-              @if($b->maxPayable)
-                <div class="flex justify-between text-xs text-gray-500">
-                  <span>Max Payable (including previous dues):</span>
-                  <span>Rs {{ number_format($b->maxPayable, 2) }}</span>
-                </div>
-              @endif
-            </div>
-          </div>
-
-          {{-- Receipt --}}
-          @if($b->recipt)
-            <div class="text-center">
-              <a href="{{ asset('storage/'.$b->recipt) }}" target="_blank"
-                 class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                📄 View Receipt
-              </a>
-            </div>
-          @endif
-        </div>
-      </x-modal>
-
       {{-- Payment History Modal --}}
       @if($b->payments && $b->payments->count() > 0)
         <x-modal :name="'payments-'.$b->id" :title="'Payment History - Bill #'.$b->id">
@@ -575,9 +477,7 @@
                         Rs {{ number_format($payment->paymentmake, 2) }}
                       </td>
                       <td class="px-3 py-2">
-                        <span class="px-2 py-1 text-xs rounded bg-gray-100">
-                          {{ ucfirst($payment->method) }}
-                        </span>
+                        <span class="px-2 py-1 text-xs rounded bg-gray-100">{{ ucfirst($payment->method) }}</span>
                       </td>
                       <td class="px-3 py-2">
                         <span class="px-2 py-1 text-xs rounded {{ $payment->status === 'approval' ? 'bg-green-100 text-green-800' : ($payment->status === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800') }}">
@@ -585,9 +485,7 @@
                         </span>
                       </td>
                       <td class="px-3 py-2">
-                        <span class="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">
-                          {{ ucfirst($payment->paymenttype) }}
-                        </span>
+                        <span class="px-2 py-1 text-xs rounded bg-blue-100 text-blue-800">{{ ucfirst($payment->paymenttype) }}</span>
                       </td>
                       <td class="px-3 py-2">
                         @if($payment->recipt)
@@ -792,8 +690,7 @@
                       </td>
                       <td class="px-3 py-2">
                         @if($payment->recipt)
-                          <a href="{{ asset('storage/' . $payment->recipt) }}" target="_blank"
-                             class="text-blue-600 hover:underline text-xs">Receipt</a>
+                          <a href="{{ asset('storage/' . $payment->recipt) }}" target="_blank"class="text-blue-600 hover:underline text-xs">Receipt</a>
                         @endif
                         @if($payment->status === 'pending')
                           <form method="post" action="{{ route('admin.house-bills.approve', $b->id) }}" class="inline ml-2">
