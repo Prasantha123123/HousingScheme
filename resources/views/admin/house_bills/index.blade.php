@@ -711,6 +711,7 @@
                 <p class="text-sm text-yellow-800">
                   <strong>{{ $b->payments->where('status', 'pending')->count() }}</strong>
                   payment(s) awaiting approval
+                  <strong>{{ $b->payments->where('status', 'pending')->count() }}</strong> payment(s) awaiting approval
                 </p>
               </div>
             @endif
