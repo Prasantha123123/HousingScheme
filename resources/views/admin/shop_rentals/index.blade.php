@@ -57,7 +57,7 @@
       placeholder="Shop No"
       value="{{ request('shopNumber') }}">
   </label>
-
+{{-- 
   <label class="block">
     <span class="text-sm text-gray-700">Status</span>
     <select name="status" class="mt-1 rounded border-gray-300 w-full">
@@ -66,7 +66,7 @@
         <option @selected(request('status')===$s)>{{ $s }}</option>
       @endforeach
     </select>
-  </label>
+  </label> --}}
 
   <label class="block">
     <span class="text-sm text-gray-700">Method</span>

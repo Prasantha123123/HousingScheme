@@ -434,7 +434,7 @@
         </x-modal>
       @endif
 
-      <x-modal :name="'reject-'.$b->id" :title="'Reject Bill #'.$b->id">
+      {{-- <x-modal :name="'reject-'.$b->id" :title="'Reject Bill #'.$b->id">
         <form method="post" action="{{ route('admin.house-bills.reject',$b->id) }}" class="space-y-3">
           @csrf
           <label class="block">
@@ -445,7 +445,7 @@
             <button class="px-3 py-2 bg-red-600 text-white rounded-lg">Reject</button>
           </div>
         </form>
-      </x-modal>
+      </x-modal> --}}
 
       {{-- Payment History Modal --}}
       @if($b->payments && $b->payments->count() > 0)
