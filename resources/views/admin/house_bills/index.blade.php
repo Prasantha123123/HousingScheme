@@ -535,8 +535,16 @@
       {{-- View Bill Modal --}}
       <x-modal :name="'view-bill-'.$b->id" :title="'Bill Details - House #'.$b->houseNo">
         @php
-          $usage   = max(0, ($b->readingUnit - $b->openingReadingUnit));
-          $balance = max(0, (float)$b->billAmount - (float)$b->paidAmount);
+          // FIX: pull readings from waterreadings first; fallback to bill fields
+          $wr = \App\Models\WaterReading::where('houseNo', $b->houseNo)
+                  ->where('month', $b->month)
+                  ->first();
+
+          $opening   = (int)($wr->openingReadingUnit ?? $b->openingReading ?? $b->openingReadingUnit ?? 0);
+          $current   = (int)($wr->readingUnit        ?? $b->readingUnit        ?? 0);
+          $usage     = max(0, $current - $opening);
+
+          $balance   = max(0, (float)$b->billAmount - (float)$b->paidAmount);
           $unitPrice = (float)\App\Models\Setting::get('water_unit_price', 0);
           $sewerage  = (float)\App\Models\Setting::get('sewerage_charge', 0);
           $service   = (float)\App\Models\Setting::get('service_charge', 0);
@@ -570,15 +578,15 @@
             <div class="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span class="text-gray-600">Opening Reading:</span>
-                <div class="font-medium">{{ number_format($b->openingReadingUnit) }} units</div>
+                <div class="font-medium">{{ $opening }} units</div>
               </div>
               <div>
                 <span class="text-gray-600">Current Reading:</span>
-                <div class="font-medium">{{ number_format($b->readingUnit) }} units</div>
+                <div class="font-medium">{{ $current }} units</div>
               </div>
               <div>
                 <span class="text-gray-600">Usage:</span>
-                <div class="font-bold text-blue-600">{{ number_format($usage) }} units</div>
+                <div class="font-bold text-blue-600">{{ $usage }} units</div>
               </div>
               <div>
                 <span class="text-gray-600">Unit Price:</span>
@@ -644,7 +652,7 @@
         </div>
       </x-modal>
 
-      {{-- Payment History Modal --}}
+      {{-- Payment History Modal (dup kept as-is) --}}
       @if($b->payments && $b->payments->count() > 0)
         <x-modal :name="'payments-'.$b->id" :title="'Payment History - Bill #'.$b->id">
           <div class="space-y-3">
