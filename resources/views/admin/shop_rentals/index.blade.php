@@ -176,10 +176,10 @@
         @endif
 
         @if($r->status !== 'Approved')
-          <form method="post" action="{{ route('admin.shop-rentals.reject',$r->id) }}" class="inline">
+          {{-- <form method="post" action="{{ route('admin.shop-rentals.reject',$r->id) }}" class="inline">
             @csrf
-            <button class="px-2 py-1 text-red-700">Reject</button>
-          </form>
+            /<button class="px-2 py-1 text-red-700">Reject</button>
+          </form> --}}
         @endif
       </div>
     </div>
@@ -302,10 +302,10 @@
 
           @if($r->status !== 'Approved')
             <span class="mx-2 text-gray-300">|</span>
-            <form method="post" action="{{ route('admin.shop-rentals.reject',$r->id) }}" class="inline">
+            {{-- <form method="post" action="{{ route('admin.shop-rentals.reject',$r->id) }}" class="inline">
               @csrf
               <button class="text-red-700">Reject</button>
-            </form>
+            </form> --}}
           @endif
         </td>
       </tr>
